@@ -1,0 +1,27 @@
+name: Sync Fork
+
+on:
+  schedule:
+    # يعمل تلقائياً كل 24 ساعة في منتصف الليل
+    - cron: '0 * * * *'
+  # يتيح لك تشغيل المزامنة يدوياً في أي وقت بضغطة زر
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+
+      - name: Sync upstream changes
+        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.1
+        with:
+          upstream_sync_repo: hisokahunter255/collector-connect
+          upstream_sync_branch: main
+          target_sync_branch: main
+          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
+          test_mode: false
