@@ -149,3 +149,100 @@ export const deleteReviewedReceiptImages = createServerFn({ method: "POST" })
 
     return { deletedCount: eligible.length };
   });
+
+async function assertAdminUser(supabase: { from: (t: string) => any }, userId: string) {
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+  if (error || !data) throw new Error("هذه العملية متاحة لمدير النظام فقط");
+}
+
+const BACKUP_TABLES = [
+  "branches",
+  "areas",
+  "profiles",
+  "user_roles",
+  "supervisor_permissions",
+  "branch_targets",
+  "deposits",
+  "collection_cycles",
+  "collection_entries",
+  "other_revenue_items",
+  "audit_logs",
+] as const;
+
+/** Full JSON snapshot of every application table (admin only). */
+export const exportBackup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { userId, supabase } = context as never as { userId: string; supabase: any };
+    await assertAdminUser(supabase, userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const tables: Record<string, unknown[]> = {};
+    for (const table of BACKUP_TABLES) {
+      const { data, error } = await supabaseAdmin.from(table).select("*");
+      if (error) throw new Error(`تعذر تصدير جدول ${table}`);
+      tables[table] = (data ?? []) as unknown[];
+    }
+
+    return { createdAt: new Date().toISOString(), json: JSON.stringify(tables) };
+  });
+
+const resetSchema = z.object({
+  confirm: z.literal("مسح", { message: "اكتب كلمة التأكيد" }),
+  includeAudit: z.boolean().default(true),
+  includeBranches: z.boolean().default(false),
+});
+
+/** Deletes all operational data so the admin can start fresh (admin only). */
+export const resetOperationalData = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => resetSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { userId, supabase } = context as never as { userId: string; supabase: any };
+    await assertAdminUser(supabase, userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const wipe = async (table: string) => {
+      const { error } = await supabaseAdmin
+        .from(table as "deposits")
+        .delete()
+        .not("id", "is", null);
+      if (error) throw new Error(`تعذر مسح جدول ${table}`);
+    };
+
+    const { data: files } = await supabaseAdmin.storage.from("receipts").list("", { limit: 1000 });
+    const paths = (files ?? []).map((f: { name: string }) => f.name);
+    if (paths.length) await supabaseAdmin.storage.from("receipts").remove(paths);
+
+    await wipe("other_revenue_items");
+    await wipe("collection_entries");
+    await wipe("collection_cycles");
+    await wipe("deposits");
+    await wipe("branch_targets");
+    if (data.includeBranches) {
+      await wipe("areas");
+      await wipe("branches");
+    }
+    if (data.includeAudit) await wipe("audit_logs");
+
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("full_name")
+      .eq("id", userId)
+      .maybeSingle();
+    await supabaseAdmin.from("audit_logs").insert({
+      actor_id: userId,
+      actor_name: (profile?.full_name as string) ?? "مدير النظام",
+      action: "تصفير بيانات النظام",
+      details: data.includeBranches
+        ? "تم مسح التوريدات والتحصيل والربط والفروع والمناطق"
+        : "تم مسح التوريدات والتحصيل والربط",
+    });
+
+    return { ok: true };
+  });

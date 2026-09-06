@@ -2,9 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ImageOff, Loader2, Settings2, Trash2 } from "lucide-react";
+import { Download, Eraser, ImageOff, Loader2, Settings2, Trash2 } from "lucide-react";
 
-import { deleteReviewedReceiptImages, updateMyCredentials } from "@/lib/account.functions";
+import {
+  deleteReviewedReceiptImages,
+  exportBackup,
+  resetOperationalData,
+  updateMyCredentials,
+} from "@/lib/account.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -44,6 +49,50 @@ function SettingsPage() {
   const [cleanupMonth, setCleanupMonth] = useState("");
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [cleaning, setCleaning] = useState(false);
+  const runBackup = useServerFn(exportBackup);
+  const runReset = useServerFn(resetOperationalData);
+  const [backingUp, setBackingUp] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetConfirm, setResetConfirm] = useState("");
+  const [includeAudit, setIncludeAudit] = useState(true);
+  const [includeBranches, setIncludeBranches] = useState(false);
+
+  async function downloadBackup() {
+    setBackingUp(true);
+    try {
+      const snapshot = await runBackup({});
+      const blob = new Blob(
+        [JSON.stringify({ createdAt: snapshot.createdAt, tables: JSON.parse(snapshot.json) }, null, 2)],
+        { type: "application/json" },
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `backup-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("تم تنزيل ملف النسخة الاحتياطية");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر إنشاء النسخة الاحتياطية");
+    } finally {
+      setBackingUp(false);
+    }
+  }
+
+  async function confirmReset() {
+    setResetting(true);
+    try {
+      await runReset({ data: { confirm: resetConfirm.trim(), includeAudit, includeBranches } });
+      setResetOpen(false);
+      setResetConfirm("");
+      toast.success("تم مسح البيانات القديمة، يمكنك البدء من جديد");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر مسح البيانات");
+    } finally {
+      setResetting(false);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -189,6 +238,91 @@ function SettingsPage() {
           </Button>
         </section>
       ) : null}
+
+      {auth?.role === "admin" ? (
+        <section className="card-elevated max-w-lg space-y-4 p-5" aria-labelledby="backup-title">
+          <div>
+            <h2 id="backup-title" className="font-bold">
+              النسخة الاحتياطية
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              تنزيل ملف واحد يحتوي كل بيانات النظام (الحسابات، الفروع، التوريدات، التحصيل، السجل).
+            </p>
+          </div>
+          <Button type="button" variant="secondary" className="w-full" disabled={backingUp} onClick={() => void downloadBackup()}>
+            {backingUp ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+            تنزيل نسخة احتياطية
+          </Button>
+        </section>
+      ) : null}
+
+      {auth?.role === "admin" ? (
+        <section className="card-elevated max-w-lg space-y-4 p-5" aria-labelledby="reset-title">
+          <div className="flex items-start gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+              <Eraser className="size-5" />
+            </div>
+            <div>
+              <h2 id="reset-title" className="font-bold">
+                مسح البيانات القديمة
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                يمسح كل التوريدات وصور الإيصالات ودورات التحصيل والربط للبدء من جديد. الحسابات تبقى كما هي. نزّل نسخة احتياطية أولًا.
+              </p>
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={includeAudit} onChange={(e) => setIncludeAudit(e.target.checked)} />
+            مسح سجل العمليات أيضًا
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={includeBranches}
+              onChange={(e) => setIncludeBranches(e.target.checked)}
+            />
+            مسح الفروع والمناطق أيضًا
+          </label>
+
+          <Button type="button" variant="destructive" className="w-full" onClick={() => setResetOpen(true)}>
+            <Eraser className="size-4" />
+            مسح البيانات القديمة
+          </Button>
+        </section>
+      ) : null}
+
+      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader className="text-right sm:text-right">
+            <AlertDialogTitle>مسح كل البيانات القديمة؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              لا يمكن استعادة البيانات بعد المسح. اكتب كلمة «مسح» للتأكيد.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={resetConfirm}
+            onChange={(e) => setResetConfirm(e.target.value)}
+            placeholder="مسح"
+            aria-label="كلمة التأكيد"
+          />
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel disabled={resetting}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={resetting || resetConfirm.trim() !== "مسح"}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmReset();
+              }}
+            >
+              {resetting ? <Loader2 className="size-4 animate-spin" /> : <Eraser className="size-4" />}
+              تأكيد المسح
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
 
       <AlertDialog open={cleanupOpen} onOpenChange={setCleanupOpen}>
         <AlertDialogContent dir="rtl">
