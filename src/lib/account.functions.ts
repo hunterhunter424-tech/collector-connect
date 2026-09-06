@@ -246,3 +246,150 @@ export const resetOperationalData = createServerFn({ method: "POST" })
 
     return { ok: true };
   });
+
+const restoreSchema = z.object({
+  json: z.string().min(2, "الملف فارغ"),
+});
+
+type Row = Record<string, unknown>;
+
+/** Restores a previously downloaded backup file (admin only). */
+export const restoreBackup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => restoreSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { userId, supabase } = context as never as { userId: string; supabase: any };
+    await assertAdminUser(supabase, userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(data.json);
+    } catch {
+      throw new Error("الملف غير صالح، اختر ملف النسخة الاحتياطية الذي نزّلته من النظام");
+    }
+    const container = parsed as { tables?: Record<string, Row[]> } & Record<string, Row[]>;
+    const tables: Record<string, Row[]> = (container.tables ?? container) as Record<string, Row[]>;
+    if (!tables || typeof tables !== "object" || !Array.isArray(tables['branches'] ?? tables['profiles'])) {
+      throw new Error("الملف غير صالح، اختر ملف النسخة الاحتياطية الذي نزّلته من النظام");
+    }
+
+    const rows = (name: string) => (Array.isArray(tables[name]) ? (tables[name] as Row[]) : []);
+
+    // Only restore accounts that still exist in the login system.
+    const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const validUsers = new Set((authUsers?.users ?? []).map((u: { id: string }) => u.id));
+
+    const wipe = async (table: string) => {
+      const { error } = await supabaseAdmin
+        .from(table as "deposits")
+        .delete()
+        .not("id", "is", null);
+      if (error) throw new Error(`تعذر تفريغ جدول ${table}`);
+    };
+    const wipeByUser = async (table: string) => {
+      const { error } = await supabaseAdmin
+        .from(table as "profile_areas")
+        .delete()
+        .not("user_id", "is", null);
+      if (error) throw new Error(`تعذر تفريغ جدول ${table}`);
+    };
+
+    await wipe("other_revenue_items");
+    await wipe("collection_entries");
+    await wipe("collection_cycles");
+    await wipe("deposits");
+    await wipe("branch_targets");
+    await wipe("audit_logs");
+    await wipeByUser("profile_areas");
+    await wipeByUser("supervisor_permissions");
+    await wipe("user_roles");
+    await wipe("areas");
+    await wipe("branches");
+
+    const insert = async (table: string, list: Row[]) => {
+      if (list.length === 0) return;
+      for (let i = 0; i < list.length; i += 200) {
+        const { error } = await supabaseAdmin
+          .from(table as "deposits")
+          .upsert(list.slice(i, i + 200) as never, { onConflict: table === "profiles" ? "id" : undefined } as never);
+        if (error) throw new Error(`تعذر استعادة جدول ${table}: ${error.message}`);
+      }
+    };
+
+    await insert("branches", rows("branches"));
+    await insert("areas", rows("areas"));
+    await insert(
+      "profiles",
+      rows("profiles").filter((r) => validUsers.has(r['id'] as string)),
+    );
+    await insert(
+      "user_roles",
+      rows("user_roles").filter((r) => validUsers.has(r['user_id'] as string)),
+    );
+    await insert(
+      "supervisor_permissions",
+      rows("supervisor_permissions").filter((r) => validUsers.has(r['user_id'] as string)),
+    );
+    await insert(
+      "profile_areas",
+      rows("profile_areas").filter((r) => validUsers.has(r['user_id'] as string)),
+    );
+    await insert("branch_targets", rows("branch_targets"));
+    await insert(
+      "deposits",
+      rows("deposits").filter((r) => validUsers.has(r['collector_id'] as string)),
+    );
+
+    // Cycles must be open while their entries are inserted (validation triggers),
+    // then their real status is restored.
+    const cycles = rows("collection_cycles");
+    await insert(
+      "collection_cycles",
+      cycles.map((c) => ({ ...c, status: "open" })),
+    );
+    await insert("collection_entries", rows("collection_entries"));
+    await insert("other_revenue_items", rows("other_revenue_items"));
+    for (const c of cycles) {
+      if (c['status'] === "open") continue;
+      await supabaseAdmin
+        .from("collection_cycles")
+        .update({
+          status: c['status'] as string,
+          closed_at: (c['closed_at'] as string) ?? null,
+          closed_by: (c['closed_by'] as string) ?? null,
+          final_billing_target_amount: c['final_billing_target_amount'] ?? null,
+          final_invoice_collection: c['final_invoice_collection'] ?? null,
+          final_other_revenue: c['final_other_revenue'] ?? null,
+          final_grand_total: c['final_grand_total'] ?? null,
+          final_collection_percentage: c['final_collection_percentage'] ?? null,
+        } as never)
+        .eq("id", c['id'] as string);
+    }
+
+    await insert(
+      "audit_logs",
+      rows("audit_logs").filter((r) => !r['actor_id'] || validUsers.has(r['actor_id'] as string)),
+    );
+
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("full_name")
+      .eq("id", userId)
+      .maybeSingle();
+    await supabaseAdmin.from("audit_logs").insert({
+      actor_id: userId,
+      actor_name: (profile?.full_name as string) ?? "مدير النظام",
+      action: "استعادة نسخة احتياطية",
+      details: `تمت استعادة بيانات النظام من ملف نسخة احتياطية (${rows("deposits").length} توريد، ${cycles.length} دورة تحصيل)`,
+    });
+
+    return {
+      ok: true,
+      counts: {
+        deposits: rows("deposits").length,
+        cycles: cycles.length,
+        profiles: rows("profiles").length,
+      },
+    };
+  });

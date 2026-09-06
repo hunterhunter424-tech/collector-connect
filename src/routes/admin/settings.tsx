@@ -2,12 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Download, Eraser, ImageOff, Loader2, Settings2, Trash2 } from "lucide-react";
+import { Download, Eraser, ImageOff, Loader2, Settings2, Trash2, Upload } from "lucide-react";
 
 import {
   deleteReviewedReceiptImages,
   exportBackup,
   resetOperationalData,
+  restoreBackup,
   updateMyCredentials,
 } from "@/lib/account.functions";
 import { useAuth } from "@/hooks/use-auth";
@@ -57,6 +58,28 @@ function SettingsPage() {
   const [resetConfirm, setResetConfirm] = useState("");
   const [includeAudit, setIncludeAudit] = useState(true);
   const [includeBranches, setIncludeBranches] = useState(false);
+  const runRestore = useServerFn(restoreBackup);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  async function confirmRestore() {
+    if (!restoreFile) return;
+    setRestoring(true);
+    try {
+      const text = await restoreFile.text();
+      const result = await runRestore({ data: { json: text } });
+      setRestoreOpen(false);
+      setRestoreFile(null);
+      toast.success(
+        `تمت استعادة النسخة الاحتياطية (${result.counts.deposits} توريد و${result.counts.cycles} دورة تحصيل)`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر استعادة النسخة الاحتياطية");
+    } finally {
+      setRestoring(false);
+    }
+  }
 
   async function downloadBackup() {
     setBackingUp(true);
@@ -253,6 +276,25 @@ function SettingsPage() {
             {backingUp ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
             تنزيل نسخة احتياطية
           </Button>
+
+          <div className="space-y-2 border-t pt-4">
+            <Label htmlFor="restore-file">استعادة نسخة احتياطية</Label>
+            <p className="text-sm text-muted-foreground">
+              اختر ملف النسخة الاحتياطية الذي نزّلته من النظام. سيتم استبدال البيانات الحالية بالبيانات الموجودة في الملف.
+            </p>
+            <Input
+              id="restore-file"
+              type="file"
+              accept="application/json,.json"
+              disabled={restoring}
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                setRestoreFile(file);
+                if (file) setRestoreOpen(true);
+                e.target.value = "";
+              }}
+            />
+          </div>
         </section>
       ) : null}
 
@@ -291,6 +333,37 @@ function SettingsPage() {
           </Button>
         </section>
       ) : null}
+
+      <AlertDialog
+        open={restoreOpen}
+        onOpenChange={(open) => {
+          setRestoreOpen(open);
+          if (!open) setRestoreFile(null);
+        }}
+      >
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader className="text-right sm:text-right">
+            <AlertDialogTitle>استعادة النسخة الاحتياطية؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم استبدال التوريدات ودورات التحصيل والفروع والمناطق والربط وسجل العمليات الحالية ببيانات الملف
+              {restoreFile ? ` «${restoreFile.name}»` : ""}. صور الإيصالات لا تُستعاد.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel disabled={restoring}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={restoring || !restoreFile}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmRestore();
+              }}
+            >
+              {restoring ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+              تأكيد الاستعادة
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
         <AlertDialogContent dir="rtl">

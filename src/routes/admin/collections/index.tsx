@@ -3,12 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Bar } from "recharts";
-import { ArrowDown, ArrowLeft, ArrowUp, Banknote, CalendarRange, FileStack, Gauge, Plus, ReceiptText, WalletCards } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Banknote, CalendarRange, FileStack, Gauge, Loader2, Plus, ReceiptText, Trash2, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { logAudit } from "@/lib/admin.functions";
+import { deleteCollectionCycle } from "@/lib/maintenance.functions";
 import { ARABIC_MONTHS, cycleName, displayCycleTotals, fetchCycleSummaries } from "@/lib/collections";
 import { formatMoney, formatNumber } from "@/lib/format";
 import { CycleStatusBadge } from "@/components/app/cycle-status-badge";
@@ -60,6 +61,14 @@ function CollectionsPage() {
   const [cycle, setCycle] = useState(ALL);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const removeCycle = useServerFn(deleteCollectionCycle);
+  const [toDelete, setToDelete] = useState<{ id: string; name: string } | null>(null);
+
+  const deleteCycle = useMutation({
+    mutationFn: async (id: string) => { await removeCycle({ data: { id } }); },
+    onSuccess: () => { toast.success("تم حذف الدورة المنتهية"); setToDelete(null); qc.invalidateQueries({ queryKey: ["collection-cycles"] }); },
+    onError: (e: Error) => toast.error(e.message || "تعذر حذف الدورة"),
+  });
 
   const { data: options } = useQuery<OptionData>({
     queryKey: ["collection-options"],
@@ -183,10 +192,27 @@ function CollectionsPage() {
 
       <section className="card-elevated overflow-hidden"><div className="border-b border-border p-4"><h2 className="font-bold">مقارنة دورات التحصيل</h2></div>
         {isLoading ? <Skeleton className="h-64" /> : <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-right text-sm"><thead className="bg-secondary/60 text-xs text-muted-foreground"><tr><th className="p-3">الدورة</th><th className="p-3">النطاق</th><th className="p-3">الربط</th><th className="p-3">الفواتير</th><th className="p-3">النسبة</th><th className="p-3">إيرادات أخرى</th><th className="p-3">الإجمالي</th><th className="p-3">الحالة</th><th className="p-3"></th></tr></thead><tbody>
-          {allRows.map((row)=>{const t=displayCycleTotals(row);return <tr key={row.id} className="border-t border-border"><td className="p-3 font-semibold">{cycleName(Number(row.month),Number(row.year))}</td><td className="p-3 text-xs">{row.branch_name}<br/><span className="text-muted-foreground">{row.area_name??"كل المناطق"} • {row.collector_name??"دورة عامة"}</span></td><td className="p-3">{formatMoney(t.target)}</td><td className="p-3">{formatMoney(t.invoices)}</td><td className="p-3 font-bold">{t.percentage==null?"لم يُدخل الربط":`${t.percentage.toFixed(1)}%`}</td><td className="p-3">{formatMoney(t.other)}</td><td className="p-3 font-semibold">{formatMoney(t.grand)}</td><td className="p-3"><CycleStatusBadge status={row.status}/></td><td className="p-3"><Button asChild variant="ghost" size="icon"><Link to="/admin/collections/$cycleId" params={{cycleId:row.id??""}} aria-label="عرض التفاصيل"><ArrowLeft className="size-4"/></Link></Button></td></tr>})}
+          {allRows.map((row)=>{const t=displayCycleTotals(row);return <tr key={row.id} className="border-t border-border"><td className="p-3 font-semibold">{cycleName(Number(row.month),Number(row.year))}</td><td className="p-3 text-xs">{row.branch_name}<br/><span className="text-muted-foreground">{row.area_name??"كل المناطق"} • {row.collector_name??"دورة عامة"}</span></td><td className="p-3">{formatMoney(t.target)}</td><td className="p-3">{formatMoney(t.invoices)}</td><td className="p-3 font-bold">{t.percentage==null?"لم يُدخل الربط":`${t.percentage.toFixed(1)}%`}</td><td className="p-3">{formatMoney(t.other)}</td><td className="p-3 font-semibold">{formatMoney(t.grand)}</td><td className="p-3"><CycleStatusBadge status={row.status}/></td><td className="p-3"><div className="flex items-center gap-1"><Button asChild variant="ghost" size="icon"><Link to="/admin/collections/$cycleId" params={{cycleId:row.id??""}} aria-label="عرض التفاصيل"><ArrowLeft className="size-4"/></Link></Button>{auth?.role==="admin"&&row.status==="closed"?<Button variant="ghost" size="icon" className="text-destructive" aria-label="حذف الدورة المنتهية" onClick={()=>setToDelete({id:row.id??"",name:cycleName(Number(row.month),Number(row.year))})}><Trash2 className="size-4"/></Button>:null}</div></td></tr>})}
           {!allRows.length?<tr><td colSpan={9} className="p-10 text-center text-muted-foreground">لا توجد دورات تطابق الفلاتر</td></tr>:null}
         </tbody></table></div>}
       </section>
+
+      <Dialog open={!!toDelete} onOpenChange={(o)=>{if(!o)setToDelete(null)}}>
+        <DialogContent dir="rtl" className="max-w-md">
+          <DialogHeader className="text-right">
+            <DialogTitle>حذف الدورة المنتهية؟</DialogTitle>
+            <DialogDescription>
+              سيتم حذف دورة {toDelete?.name} وكل عمليات التحصيل والإيرادات الأخرى التابعة لها نهائيًا، ولا يمكن استعادتها.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Button variant="destructive" className="flex-1" disabled={deleteCycle.isPending} onClick={()=>toDelete&&deleteCycle.mutate(toDelete.id)}>
+              {deleteCycle.isPending?<Loader2 className="size-4 animate-spin"/>:<Trash2 className="size-4"/>} تأكيد الحذف
+            </Button>
+            <Button variant="secondary" className="flex-1" onClick={()=>setToDelete(null)}>إلغاء</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

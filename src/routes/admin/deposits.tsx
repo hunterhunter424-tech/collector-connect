@@ -3,11 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, FileSearch, Search, XCircle } from "lucide-react";
+import { CheckCircle2, FileSearch, Loader2, Search, Trash2, XCircle } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { logAudit } from "@/lib/admin.functions";
+import { deleteDeposit } from "@/lib/maintenance.functions";
 import { fetchDeposits, summarize, type DepositRow } from "@/lib/deposits";
 import {
   formatDate,
@@ -109,6 +110,21 @@ function DepositsPage() {
 
   const stats = summarize(rows ?? []);
   const [confirmAll, setConfirmAll] = useState(false);
+  const removeDeposit = useServerFn(deleteDeposit);
+  const [toDelete, setToDelete] = useState<DepositRow | null>(null);
+
+  const destroy = useMutation({
+    mutationFn: async (row: DepositRow) => {
+      await removeDeposit({ data: { id: row.id } });
+    },
+    onSuccess: () => {
+      toast.success("تم حذف التوريد، يمكن للمحصل رفعه من جديد");
+      setToDelete(null);
+      queryClient.invalidateQueries({ queryKey: ["deposits"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "تعذر حذف التوريد"),
+  });
 
   const review = useMutation({
     mutationFn: async (p: { row: DepositRow; status: "approved" | "rejected"; note: string }) => {
@@ -344,16 +360,29 @@ function DepositsPage() {
                     {row.admin_notes ?? "-"}
                   </td>
                   <td className="p-3">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        setReviewing(row);
-                        setAdminNote(row.admin_notes ?? "");
-                      }}
-                    >
-                      {canReview ? "عرض ومراجعة" : "عرض"}
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          setReviewing(row);
+                          setAdminNote(row.admin_notes ?? "");
+                        }}
+                      >
+                        {canReview ? "عرض ومراجعة" : "عرض"}
+                      </Button>
+                      {auth?.role === "admin" ? (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="text-destructive"
+                          aria-label="حذف التوريد"
+                          onClick={() => setToDelete(row)}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -438,6 +467,32 @@ function DepositsPage() {
               )}
             </div>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+        <DialogContent dir="rtl" className="max-w-md">
+          <DialogHeader className="text-right">
+            <DialogTitle>حذف التوريد نهائيًا؟</DialogTitle>
+            <DialogDescription>
+              سيتم حذف العملية رقم {toDelete?.ref} وصورة الإيصال الخاصة بها، ويستطيع المحصل{" "}
+              {toDelete?.collector_name} رفع التوريد من جديد بشكل صحيح.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Button
+              variant="destructive"
+              className="flex-1"
+              disabled={destroy.isPending}
+              onClick={() => toDelete && destroy.mutate(toDelete)}
+            >
+              {destroy.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              تأكيد الحذف
+            </Button>
+            <Button variant="secondary" className="flex-1" onClick={() => setToDelete(null)}>
+              إلغاء
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
