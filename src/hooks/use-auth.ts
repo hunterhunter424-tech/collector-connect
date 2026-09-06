@@ -31,6 +31,7 @@ export type AuthState = {
     area_id: string | null;
     branch_name: string | null;
     area_name: string | null;
+    areas: { id: string; name: string }[];
   } | null;
 };
 
@@ -39,14 +40,16 @@ export async function fetchAuthState(): Promise<AuthState | null> {
   const user = data.user;
   if (!user) return null;
 
-  const [profileRes, rolesRes] = await Promise.all([
+  const [profileRes, rolesRes, areasRes] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, full_name, username, phone, active, branch_id, area_id, branches(name), areas(name)")
+      .select("id, full_name, username, phone, active, branch_id, area_id, branches(name), areas!profiles_area_id_fkey(name)")
       .eq("id", user.id)
       .maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", user.id),
+    supabase.from("profile_areas").select("area_id, areas!profile_areas_area_id_fkey(name)").eq("user_id", user.id),
   ]);
+
 
   const roles = (rolesRes.data ?? []).map((r) => r.role as string);
   const role: AppRole = roles.includes("admin")
@@ -76,6 +79,14 @@ export async function fetchAuthState(): Promise<AuthState | null> {
     };
   }
 
+  const assignedAreas = ((areasRes.data ?? []) as {
+    area_id: string;
+    areas?: { name: string } | null;
+  }[]).map((r) => ({ id: r.area_id, name: r.areas?.name ?? "" }));
+  if (p?.['area_id'] && !assignedAreas.some((a) => a.id === p['area_id'])) {
+    assignedAreas.unshift({ id: p['area_id'] as string, name: p.areas?.name ?? "" });
+  }
+
   return {
     userId: user.id,
     role,
@@ -92,6 +103,7 @@ export async function fetchAuthState(): Promise<AuthState | null> {
           area_id: (p['area_id'] as string | null) ?? null,
           branch_name: p.branches?.name ?? null,
           area_name: p.areas?.name ?? null,
+          areas: assignedAreas,
         }
       : null,
   };

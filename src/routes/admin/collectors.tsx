@@ -62,6 +62,8 @@ type CollectorRow = {
   area_id: string | null;
   branch_name: string | null;
   area_name: string | null;
+  area_ids: string[];
+  area_names: string[];
   deposits: number;
   lastDeposit: string | null;
 };
@@ -84,14 +86,25 @@ function CollectorsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["collectors"],
     queryFn: async (): Promise<CollectorRow[]> => {
-      const [profiles, roles, deposits] = await Promise.all([
+      const [profiles, roles, deposits, links] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, full_name, username, phone, active, branch_id, area_id, branches(name), areas(name)")
+          .select("id, full_name, username, phone, active, branch_id, area_id, branches(name), areas!profiles_area_id_fkey(name)")
           .order("full_name"),
         supabase.from("user_roles").select("user_id, role"),
         supabase.from("deposits").select("collector_id, created_at").limit(5000),
+        supabase.from("profile_areas").select("user_id, area_id, areas!profile_areas_area_id_fkey(name)"),
       ]);
+      const areaLinks = new Map<string, { id: string; name: string }[]>();
+      for (const l of (links.data ?? []) as {
+        user_id: string;
+        area_id: string;
+        areas?: { name: string } | null;
+      }[]) {
+        const list = areaLinks.get(l.user_id) ?? [];
+        list.push({ id: l.area_id, name: l.areas?.name ?? "" });
+        areaLinks.set(l.user_id, list);
+      }
       if (profiles.error) throw profiles.error;
       const adminIds = new Set(
         (roles.data ?? []).filter((r) => r.role === "admin").map((r) => r.user_id),
@@ -108,6 +121,10 @@ function CollectorsPage() {
         .map((p) => {
           const row = p as typeof p & { branches?: { name: string } | null; areas?: { name: string } | null };
           const s = stats.get(p.id);
+          const linked = areaLinks.get(p.id) ?? [];
+          if (p.area_id && !linked.some((a) => a.id === p.area_id)) {
+            linked.unshift({ id: p.area_id, name: row.areas?.name ?? "" });
+          }
           return {
             id: p.id,
             full_name: p.full_name,
@@ -118,6 +135,8 @@ function CollectorsPage() {
             area_id: p.area_id,
             branch_name: row.branches?.name ?? null,
             area_name: row.areas?.name ?? null,
+            area_ids: linked.map((a) => a.id),
+            area_names: linked.map((a) => a.name).filter(Boolean),
             deposits: s?.count ?? 0,
             lastDeposit: s?.last ?? null,
           };
@@ -149,7 +168,7 @@ function CollectorsPage() {
     const t = term.trim().toLowerCase();
     if (!t) return data ?? [];
     return (data ?? []).filter((r) =>
-      [r.full_name, r.username, r.branch_name, r.area_name, r.phone]
+      [r.full_name, r.username, r.branch_name, r.area_name, r.phone, ...r.area_names]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(t)),
     );
@@ -168,6 +187,32 @@ function CollectorsPage() {
         })
         .eq("id", row.id);
       if (error) throw error;
+
+      const wanted = Array.from(
+        new Set([...(row.area_id ? [row.area_id] : []), ...row.area_ids]),
+      );
+      const { data: current } = await supabase
+        .from("profile_areas")
+        .select("area_id")
+        .eq("user_id", row.id);
+      const existing = (current ?? []).map((c) => c.area_id as string);
+      const toAdd = wanted.filter((a) => !existing.includes(a));
+      const toRemove = existing.filter((a) => !wanted.includes(a));
+      if (toAdd.length > 0) {
+        const { error: addErr } = await supabase
+          .from("profile_areas")
+          .insert(toAdd.map((area_id) => ({ user_id: row.id, area_id })));
+        if (addErr) throw addErr;
+      }
+      if (toRemove.length > 0) {
+        const { error: delErr } = await supabase
+          .from("profile_areas")
+          .delete()
+          .eq("user_id", row.id)
+          .in("area_id", toRemove);
+        if (delErr) throw delErr;
+      }
+
       await audit({
         data: { action: "تعديل بيانات محصل", details: `تم تعديل بيانات ${row.full_name}` },
       });
@@ -277,7 +322,9 @@ function CollectorsPage() {
                     {row.username}
                   </td>
                   <td className="p-3">{row.branch_name ?? "-"}</td>
-                  <td className="p-3">{row.area_name ?? "-"}</td>
+                  <td className="p-3">
+                    {row.area_names.length > 0 ? row.area_names.join(" • ") : (row.area_name ?? "-")}
+                  </td>
                   <td className="p-3 font-mono text-xs" dir="ltr">
                     {row.phone ?? "-"}
                   </td>
@@ -371,7 +418,9 @@ function CollectorsPage() {
                   <Label>الفرع</Label>
                   <Select
                     value={editing.branch_id ?? ""}
-                    onValueChange={(v) => setEditing({ ...editing, branch_id: v, area_id: null })}
+                    onValueChange={(v) =>
+                      setEditing({ ...editing, branch_id: v, area_id: null, area_ids: [] })
+                    }
                   >
                     <SelectTrigger className="h-11">
                       <SelectValue placeholder="اختر الفرع" />
@@ -386,10 +435,16 @@ function CollectorsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>المنطقة</Label>
+                  <Label>المنطقة الأساسية</Label>
                   <Select
                     value={editing.area_id ?? ""}
-                    onValueChange={(v) => setEditing({ ...editing, area_id: v })}
+                    onValueChange={(v) =>
+                      setEditing({
+                        ...editing,
+                        area_id: v,
+                        area_ids: editing.area_ids.filter((x) => x !== v),
+                      })
+                    }
                     disabled={!editing.branch_id}
                   >
                     <SelectTrigger className="h-11">
@@ -405,6 +460,38 @@ function CollectorsPage() {
                   </Select>
                 </div>
               </div>
+              {(areas ?? []).length > 1 ? (
+                <div className="space-y-2 rounded-xl bg-secondary/60 p-3">
+                  <p className="text-sm font-semibold">مناطق إضافية</p>
+                  <p className="text-xs text-muted-foreground">
+                    كل المناطق المختارة يمكن للمحصل التوريد عنها.
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {(areas ?? [])
+                      .filter((a) => a.id !== editing.area_id)
+                      .map((a) => (
+                        <label
+                          key={a.id}
+                          className="flex items-center justify-between rounded-lg bg-background px-3 py-2 text-sm"
+                        >
+                          <span>{a.name}</span>
+                          <Switch
+                            checked={editing.area_ids.includes(a.id)}
+                            onCheckedChange={(v) =>
+                              setEditing({
+                                ...editing,
+                                area_ids: v
+                                  ? [...editing.area_ids, a.id]
+                                  : editing.area_ids.filter((x) => x !== a.id),
+                              })
+                            }
+                          />
+                        </label>
+                      ))}
+                  </div>
+                </div>
+              ) : null}
+
               <div className="flex items-center justify-between rounded-xl bg-secondary/60 p-3">
                 <span className="text-sm font-semibold">
                   {editing.active ? "الحساب نشط" : "الحساب موقوف"}

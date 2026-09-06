@@ -419,6 +419,39 @@ export type Database = {
           },
         ]
       }
+      profile_areas: {
+        Row: {
+          area_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          area_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          area_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_areas_area_id_fkey"
+            columns: ["area_id"]
+            isOneToOne: false
+            referencedRelation: "areas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_areas_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           active: boolean

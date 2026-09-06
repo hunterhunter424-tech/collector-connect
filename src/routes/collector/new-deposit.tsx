@@ -11,6 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/collector/new-deposit")({
   head: () => ({
@@ -36,6 +43,11 @@ function NewDepositPage() {
   const [invoices, setInvoices] = useState("");
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
+  const [areaId, setAreaId] = useState("");
+
+  const myAreas = profile?.areas ?? [];
+  const multiArea = myAreas.length > 1;
+  const selectedArea = areaId || profile?.area_id || myAreas[0]?.id || "";
 
   async function pickFile(input: File | null) {
     if (!input) return;
@@ -60,6 +72,7 @@ function NewDepositPage() {
       const value = Number(amount);
       if (!Number.isFinite(count) || count <= 0) throw new Error("أدخل عدد فواتير صحيح");
       if (!Number.isFinite(value) || value <= 0) throw new Error("أدخل مبلغًا صحيحًا");
+      if (multiArea && !selectedArea) throw new Error("اختر المنطقة التي تورّد عنها");
 
       const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
       const path = `${profile.id}/${Date.now()}.${ext}`;
@@ -70,6 +83,7 @@ function NewDepositPage() {
 
       const { error } = await supabase.from("deposits").insert({
         collector_id: profile.id,
+        area_id: selectedArea || null,
         invoices_count: count,
         amount: value,
         receipt_image_url: path,
@@ -93,15 +107,36 @@ function NewDepositPage() {
       <div>
         <h1 className="text-xl font-bold">إضافة توريد جديد</h1>
         <p className="text-sm text-muted-foreground">
-          التاريخ والوقت والفرع والمنطقة تُسجل تلقائيًا من حسابك.
+          {multiArea
+            ? "التاريخ والوقت والفرع تُسجل تلقائيًا، واختر المنطقة التي تورّد عنها."
+            : "التاريخ والوقت والفرع والمنطقة تُسجل تلقائيًا من حسابك."}
         </p>
       </div>
 
       <div className="card-elevated space-y-2 p-4 text-sm">
         <Row label="اسم المحصل" value={profile?.full_name ?? "-"} />
         <Row label="الفرع" value={profile?.branch_name ?? "-"} />
-        <Row label="المنطقة" value={profile?.area_name ?? "-"} />
+        {multiArea ? (
+          <div className="space-y-2 rounded-lg bg-secondary/60 px-3 py-2">
+            <Label htmlFor="area">المنطقة</Label>
+            <Select value={selectedArea} onValueChange={setAreaId}>
+              <SelectTrigger id="area" className="h-11 bg-background">
+                <SelectValue placeholder="اختر المنطقة" />
+              </SelectTrigger>
+              <SelectContent>
+                {myAreas.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <Row label="المنطقة" value={profile?.area_name ?? myAreas[0]?.name ?? "-"} />
+        )}
       </div>
+
 
       <form
         className="card-elevated space-y-4 p-4"

@@ -18,6 +18,7 @@ const createSchema = z.object({
   role: z.enum(["collector", "supervisor"]).default("collector"),
   branch_id: z.string().uuid("اختر الفرع").optional().nullable(),
   area_id: z.string().uuid("اختر المنطقة").optional().nullable(),
+  area_ids: z.array(z.string().uuid()).default([]),
   phone: z.string().optional().nullable(),
   active: z.boolean().default(true),
   can_manage_collectors: z.boolean().default(false),
@@ -114,6 +115,15 @@ export const createCollector = createServerFn({ method: "POST" })
       throw new Error(profileError.message);
     }
     await supabaseAdmin.from("user_roles").insert({ user_id: newUserId, role: data.role });
+
+    const allAreas = Array.from(
+      new Set([...(data.area_id ? [data.area_id] : []), ...data.area_ids]),
+    );
+    if (allAreas.length > 0) {
+      await supabaseAdmin
+        .from("profile_areas")
+        .insert(allAreas.map((area_id) => ({ user_id: newUserId, area_id })));
+    }
 
     if (data.role === "supervisor") {
       await supabaseAdmin.from("supervisor_permissions").insert({
