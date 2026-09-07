@@ -2,14 +2,17 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowRight, Banknote, CalendarDays, FileStack, Gauge, LockKeyhole, Pencil, Plus, RotateCcw, Trash2, WalletCards } from "lucide-react";
+import { ArrowRight, Banknote, CalendarDays, FileStack, Gauge, ImagePlus, LockKeyhole, Pencil, Plus, RotateCcw, Trash2, WalletCards, X } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { cycleName, displayCycleTotals, fetchCycle, fetchCycleEntries } from "@/lib/collections";
+import { ALLOWED_TYPES, compressReceipt } from "@/lib/image";
 import { formatDate, formatDateTime, formatMoney, formatNumber, formatTime } from "@/lib/format";
 import { CycleStatusBadge } from "@/components/app/cycle-status-badge";
+import { ReceiptThumb } from "@/components/app/receipt-image";
 import { StatCard } from "@/components/app/stat-card";
+
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -50,7 +53,21 @@ function CycleDetailsPage() {
   const [targetOpen, setTargetOpen] = useState(false);
   const [targetAmount, setTargetAmount] = useState("");
   const [targetInvoices, setTargetInvoices] = useState("");
+  const [shot, setShot] = useState<File | null>(null);
+  const [shotPreview, setShotPreview] = useState<string | null>(null);
   const [editEntry, setEditEntry] = useState<{ id: string; date: string; invoices: string; other: string; notes: string } | null>(null);
+
+  const pickShot = async (file: File | null) => {
+    if (!file) { setShot(null); setShotPreview(null); return; }
+    try {
+      const compressed = await compressReceipt(file);
+      setShot(compressed);
+      setShotPreview(URL.createObjectURL(compressed));
+    } catch (e) {
+      toast.error((e as Error).message || "تعذر قراءة الصورة");
+    }
+  };
+
 
   const { data: cycle, isLoading } = useQuery({ queryKey: ["collection-cycle", cycleId], queryFn: () => fetchCycle(cycleId) });
   const { data: entries } = useQuery({ queryKey: ["collection-entries", cycleId], queryFn: () => fetchCycleEntries(cycleId) });
@@ -79,9 +96,17 @@ function CycleDetailsPage() {
         if (Math.abs(sum - otherDelta) > 0.009) throw new Error(`مجموع بنود الإيرادات الأخرى (${sum}) يجب أن يساوي الزيادة الجديدة (${otherDelta})`);
       }
       if (!auth?.userId) throw new Error("تعذر تحديد المستخدم");
+      let shotPath: string | null = null;
+      if (shot) {
+        const path = `${auth.userId}/collections/${cycleId}-${Date.now()}.jpg`;
+        const { error: upErr } = await supabase.storage.from("receipts").upload(path, shot, { contentType: shot.type || "image/jpeg", upsert: false });
+        if (upErr) throw new Error("تعذر رفع صورة الشاشة: " + upErr.message);
+        shotPath = path;
+      }
       const { data: entry, error } = await supabase.from("collection_entries").insert({
         cycle_id: cycleId, entry_date: entryDate, invoices_collection_amount: invoiceDelta,
         other_revenue_amount: otherDelta, notes: notes.trim() || null, created_by: auth.userId,
+        screenshot_url: shotPath,
       }).select("id").single();
       if (error) throw error;
       if (validItems.length) {
@@ -91,7 +116,8 @@ function CycleDetailsPage() {
         if (itemsError) { await supabase.from("collection_entries").delete().eq("id", entry.id); throw itemsError; }
       }
     },
-    onSuccess: () => { toast.success("تمت إضافة عملية التحصيل"); setInvoiceTotal(""); setOtherTotal(""); setNotes(""); setItems([blankItem()]); refresh(); },
+    onSuccess: () => { toast.success("تمت إضافة عملية التحصيل"); setInvoiceTotal(""); setOtherTotal(""); setNotes(""); setItems([blankItem()]); setShot(null); setShotPreview(null); refresh(); },
+
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -189,15 +215,35 @@ function CycleDetailsPage() {
         <Field label="إجمالي تحصيل الفواتير حتى اليوم"><Input dir="ltr" inputMode="decimal" value={invoiceTotal} onChange={(e)=>setInvoiceTotal(e.target.value)} placeholder={String(soFarInvoices)}/><p className="text-xs text-muted-foreground">المسجل سابقًا {formatMoney(soFarInvoices)} • الجديد {formatMoney(invoiceDelta)}</p></Field>
         <Field label="إجمالي الإيرادات الأخرى حتى اليوم"><Input dir="ltr" inputMode="decimal" value={otherTotal} onChange={(e)=>setOtherTotal(e.target.value)} placeholder={String(soFarOther)}/><p className="text-xs text-muted-foreground">المسجل سابقًا {formatMoney(soFarOther)} • الجديد {formatMoney(otherDelta)}</p></Field>
       </div>
+      <div className="mt-4 rounded-lg border border-dashed border-border bg-secondary/30 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold">صورة شاشة الكمبيوتر (اختياري)</h3>
+            <p className="text-xs text-muted-foreground">أضف صورة للشاشة بجوار التسجيل اليدوي لتوثيق الأرقام — JPG, PNG, WEBP</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {shotPreview ? <>
+              <img src={shotPreview} alt="صورة شاشة الكمبيوتر" className="size-14 rounded-lg border border-border object-cover" />
+              <Button variant="ghost" size="icon" aria-label="إزالة الصورة" onClick={()=>pickShot(null)}><X className="size-4 text-destructive"/></Button>
+            </> : null}
+            <Button variant="outline" asChild>
+              <label htmlFor="cycle-shot" className="cursor-pointer"><ImagePlus className="size-4"/> {shotPreview ? "تغيير الصورة" : "إضافة صورة"}</label>
+            </Button>
+            <input id="cycle-shot" type="file" className="sr-only" accept={ALLOWED_TYPES.join(",")} onChange={(e)=>pickShot(e.target.files?.[0] ?? null)} />
+          </div>
+        </div>
+      </div>
+
       <div className="mt-5 border-t border-border pt-4"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-bold">بنود الإيرادات الأخرى (اختياري)</h3><p className="text-xs text-muted-foreground">الملفات، المخالفات، الأعمال الأخرى — بمبالغ اليوم فقط، ومجموعها يساوي الجديد {formatMoney(otherDelta)}{itemsSum?` (المكتوب ${formatMoney(itemsSum)})`:""}</p></div><Button variant="outline" size="sm" onClick={()=>setItems(s=>[...s,blankItem()])}><Plus className="size-4"/> إضافة بند</Button></div>
         <div className="space-y-3">{items.map((item,index)=><div key={index} className="grid gap-2 rounded-lg bg-secondary/50 p-3 sm:grid-cols-[1fr_160px_1fr_auto]"><Input placeholder="نوع الإيراد" value={item.category} onChange={(e)=>setItems(s=>s.map((x,i)=>i===index?{...x,category:e.target.value}:x))}/><Input dir="ltr" inputMode="decimal" placeholder="المبلغ" value={item.amount} onChange={(e)=>setItems(s=>s.map((x,i)=>i===index?{...x,amount:e.target.value}:x))}/><Input placeholder="ملاحظات البند" value={item.notes} onChange={(e)=>setItems(s=>s.map((x,i)=>i===index?{...x,notes:e.target.value}:x))}/><Button variant="ghost" size="icon" aria-label="حذف البند" disabled={items.length===1} onClick={()=>setItems(s=>s.filter((_,i)=>i!==index))}><Trash2 className="size-4 text-destructive"/></Button></div>)}</div>
       </div>
       <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_auto]"><Field label="ملاحظات العملية"><Textarea value={notes} onChange={(e)=>setNotes(e.target.value)} placeholder="ملاحظات اختيارية"/></Field><Button className="self-end" disabled={addEntry.isPending} onClick={()=>addEntry.mutate()}><Plus className="size-4"/> حفظ عملية التحصيل</Button></div>
     </section> : <div className="rounded-lg border border-border bg-secondary/50 p-4 text-center text-sm text-muted-foreground"><LockKeyhole className="mx-auto mb-2 size-5"/>تم تثبيت النتائج. أعد فتح الدورة لإضافة عمليات جديدة.</div>}
 
-    <section className="card-elevated overflow-hidden"><div className="border-b border-border p-4"><h2 className="font-bold">سجل عمليات التحصيل</h2><p className="text-xs text-muted-foreground">{formatNumber(entries?.length??0)} عملية مسجلة</p></div><div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-right text-sm"><thead className="bg-secondary/60 text-xs text-muted-foreground"><tr><th className="p-3">التاريخ</th><th className="p-3">الوقت</th><th className="p-3">فواتير جديدة</th><th className="p-3">إجمالي الفواتير</th><th className="p-3">إيرادات أخرى جديدة</th><th className="p-3">إجمالي الإيرادات الأخرى</th><th className="p-3">بنود الإيرادات الأخرى</th><th className="p-3">ملاحظات</th><th className="p-3">أدخلها</th><th className="p-3"></th></tr></thead><tbody>
-      {(entries??[]).map(entry=><tr key={entry.id} className="border-t border-border align-top"><td className="p-3">{formatDate(entry.entry_date)}</td><td className="p-3">{formatTime(entry.created_at)}</td><td className="p-3 font-semibold">{formatMoney(entry.invoices_collection_amount)}</td><td className="p-3">{formatMoney(running.get(entry.id)?.invoices??0)}</td><td className="p-3 font-semibold">{formatMoney(entry.other_revenue_amount)}</td><td className="p-3">{formatMoney(running.get(entry.id)?.other??0)}</td><td className="p-3">{entry.items.length?<ul className="space-y-1">{entry.items.map(item=><li key={item.id}>{item.category}: <span className="font-semibold">{formatMoney(item.amount)}</span>{item.notes?<span className="text-xs text-muted-foreground"> — {item.notes}</span>:null}</li>)}</ul>:"-"}</td><td className="p-3 text-muted-foreground">{entry.notes??"-"}</td><td className="p-3">{entry.creator_name}</td><td className="p-3">{canEdit?<div className="flex items-center gap-1"><Button variant="ghost" size="icon" aria-label="تعديل العملية" onClick={()=>setEditEntry({id:entry.id,date:String(entry.entry_date).slice(0,10),invoices:String(Number(entry.invoices_collection_amount??0)),other:String(Number(entry.other_revenue_amount??0)),notes:entry.notes??""})}><Pencil className="size-4"/></Button><Button variant="ghost" size="icon" className="text-destructive" aria-label="حذف العملية" onClick={()=>setEntryToDelete(entry.id)}><Trash2 className="size-4"/></Button></div>:null}</td></tr>)}
-      {!entries?.length?<tr><td colSpan={10} className="p-10 text-center text-muted-foreground">لا توجد عمليات تحصيل في هذه الدورة بعد</td></tr>:null}
+    <section className="card-elevated overflow-hidden"><div className="border-b border-border p-4"><h2 className="font-bold">سجل عمليات التحصيل</h2><p className="text-xs text-muted-foreground">{formatNumber(entries?.length??0)} عملية مسجلة</p></div><div className="overflow-x-auto"><table className="w-full min-w-[1150px] text-right text-sm"><thead className="bg-secondary/60 text-xs text-muted-foreground"><tr><th className="p-3">التاريخ</th><th className="p-3">الوقت</th><th className="p-3">فواتير جديدة</th><th className="p-3">إجمالي الفواتير</th><th className="p-3">إيرادات أخرى جديدة</th><th className="p-3">إجمالي الإيرادات الأخرى</th><th className="p-3">بنود الإيرادات الأخرى</th><th className="p-3">صورة الشاشة</th><th className="p-3">ملاحظات</th><th className="p-3">أدخلها</th><th className="p-3"></th></tr></thead><tbody>
+      {(entries??[]).map(entry=><tr key={entry.id} className="border-t border-border align-top"><td className="p-3">{formatDate(entry.entry_date)}</td><td className="p-3">{formatTime(entry.created_at)}</td><td className="p-3 font-semibold">{formatMoney(entry.invoices_collection_amount)}</td><td className="p-3">{formatMoney(running.get(entry.id)?.invoices??0)}</td><td className="p-3 font-semibold">{formatMoney(entry.other_revenue_amount)}</td><td className="p-3">{formatMoney(running.get(entry.id)?.other??0)}</td><td className="p-3">{entry.items.length?<ul className="space-y-1">{entry.items.map(item=><li key={item.id}>{item.category}: <span className="font-semibold">{formatMoney(item.amount)}</span>{item.notes?<span className="text-xs text-muted-foreground"> — {item.notes}</span>:null}</li>)}</ul>:"-"}</td><td className="p-3">{entry.screenshot_url?<ReceiptThumb path={entry.screenshot_url} label="صورة شاشة الكمبيوتر"/>:<span className="text-muted-foreground">-</span>}</td><td className="p-3 text-muted-foreground">{entry.notes??"-"}</td><td className="p-3">{entry.creator_name}</td><td className="p-3">{canEdit?<div className="flex items-center gap-1"><Button variant="ghost" size="icon" aria-label="تعديل العملية" onClick={()=>setEditEntry({id:entry.id,date:String(entry.entry_date).slice(0,10),invoices:String(Number(entry.invoices_collection_amount??0)),other:String(Number(entry.other_revenue_amount??0)),notes:entry.notes??""})}><Pencil className="size-4"/></Button><Button variant="ghost" size="icon" className="text-destructive" aria-label="حذف العملية" onClick={()=>setEntryToDelete(entry.id)}><Trash2 className="size-4"/></Button></div>:null}</td></tr>)}
+
+      {!entries?.length?<tr><td colSpan={11} className="p-10 text-center text-muted-foreground">لا توجد عمليات تحصيل في هذه الدورة بعد</td></tr>:null}
     </tbody></table></div></section>
 
     <Dialog open={targetOpen} onOpenChange={setTargetOpen}>

@@ -251,6 +251,7 @@ export type Database = {
           invoices_collection_amount: number
           notes: string | null
           other_revenue_amount: number
+          screenshot_url: string | null
           updated_at: string
         }
         Insert: {
@@ -263,6 +264,7 @@ export type Database = {
           invoices_collection_amount?: number
           notes?: string | null
           other_revenue_amount?: number
+          screenshot_url?: string | null
           updated_at?: string
         }
         Update: {
@@ -275,6 +277,7 @@ export type Database = {
           invoices_collection_amount?: number
           notes?: string | null
           other_revenue_amount?: number
+          screenshot_url?: string | null
           updated_at?: string
         }
         Relationships: [
