@@ -3,12 +3,26 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, FileSearch, Loader2, Search, Trash2, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  FileSearch,
+  Loader2,
+  Plus,
+  Save,
+  Search,
+  Trash2,
+  XCircle,
+} from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { logAudit } from "@/lib/admin.functions";
-import { deleteDeposit } from "@/lib/maintenance.functions";
+import {
+  createManualDeposit,
+  deleteDeposit,
+  updateDepositDetails,
+} from "@/lib/maintenance.functions";
+
 import { fetchDeposits, summarize, type DepositRow } from "@/lib/deposits";
 import {
   formatDate,
@@ -126,6 +140,110 @@ function DepositsPage() {
     onError: (e: Error) => toast.error(e.message || "تعذر حذف التوريد"),
   });
 
+  const isAdmin = auth?.role === "admin";
+  const today = new Date().toISOString().slice(0, 10);
+  const saveDetails = useServerFn(updateDepositDetails);
+  const addManualFn = useServerFn(createManualDeposit);
+  const blankManual = {
+    collector: "",
+    area: ALL,
+    date: today,
+    time: "12:00",
+    invoices: "",
+    amount: "",
+    notes: "",
+    status: "approved" as "approved" | "pending",
+  };
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manual, setManual] = useState(blankManual);
+  const [fix, setFix] = useState({
+    date: today,
+    time: "12:00",
+    invoices: "",
+    amount: "",
+    notes: "",
+    status: "pending" as "pending" | "approved" | "rejected",
+  });
+
+  function openReview(row: DepositRow) {
+    setReviewing(row);
+    setAdminNote(row.admin_notes ?? "");
+    const created = new Date(row.created_at);
+    setFix({
+      date: row.created_at.slice(0, 10),
+      time: `${String(created.getHours()).padStart(2, "0")}:${String(created.getMinutes()).padStart(2, "0")}`,
+      invoices: String(row.invoices_count),
+      amount: String(row.amount),
+      notes: row.notes ?? "",
+      status: row.status as "pending" | "approved" | "rejected",
+    });
+  }
+
+  const refreshDeposits = () => {
+    queryClient.invalidateQueries({ queryKey: ["deposits"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
+  };
+
+  const fixDeposit = useMutation({
+    mutationFn: async (row: DepositRow) => {
+      const invoices = Number(fix.invoices);
+      const amount = Number(String(fix.amount).replace(/,/g, ""));
+      if (!Number.isFinite(invoices) || invoices < 0) throw new Error("عدد الفواتير غير صحيح");
+      if (!Number.isFinite(amount) || amount < 0) throw new Error("المبلغ غير صحيح");
+      if (!fix.date) throw new Error("أدخل تاريخ التوريد");
+      await saveDetails({
+        data: {
+          id: row.id,
+          invoices_count: invoices,
+          amount,
+          notes: fix.notes,
+          admin_notes: adminNote,
+          entry_date: fix.date,
+          entry_time: fix.time || "12:00",
+          status: fix.status,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("تم تصحيح بيانات التوريد");
+      setReviewing(null);
+      refreshDeposits();
+    },
+    onError: (e: Error) => toast.error(e.message || "تعذر تصحيح التوريد"),
+  });
+
+  const addManual = useMutation({
+    mutationFn: async () => {
+      const invoices = Number(manual.invoices);
+      const amount = Number(String(manual.amount).replace(/,/g, ""));
+      if (!manual.collector) throw new Error("اختر المحصل");
+      if (!manual.date) throw new Error("أدخل تاريخ التوريد");
+      if (!Number.isFinite(invoices) || invoices < 0) throw new Error("عدد الفواتير غير صحيح");
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("أدخل مبلغ التوريد");
+      await addManualFn({
+        data: {
+          collector_id: manual.collector,
+          area_id: manual.area === ALL ? null : manual.area,
+          invoices_count: invoices,
+          amount,
+          notes: manual.notes,
+          entry_date: manual.date,
+          entry_time: manual.time || "12:00",
+          status: manual.status,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("تمت إضافة التوريد للمحصل");
+      setManualOpen(false);
+      setManual(blankManual);
+      refreshDeposits();
+    },
+    onError: (e: Error) => toast.error(e.message || "تعذر إضافة التوريد"),
+  });
+
+
+
   const review = useMutation({
     mutationFn: async (p: { row: DepositRow; status: "approved" | "rejected"; note: string }) => {
       const { error } = await supabase
@@ -196,13 +314,21 @@ function DepositsPage() {
             {formatMoney(stats.amount)}
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        {isAdmin ? (
+          <Button variant="outline" onClick={() => setManualOpen(true)}>
+            <Plus className="size-4" /> إضافة توريد لمحصل
+          </Button>
+        ) : null}
         <Button
           disabled={!canReview || pendingRows.length === 0 || reviewAll.isPending}
           onClick={() => setConfirmAll(true)}
         >
           <CheckCircle2 className="size-4" /> تمت مراجعة الكل ({formatNumber(pendingRows.length)})
         </Button>
+        </div>
       </div>
+
 
       <div className="card-elevated grid gap-3 p-4 md:grid-cols-3 lg:grid-cols-4">
         <div className="relative md:col-span-3 lg:col-span-2">
@@ -364,10 +490,8 @@ function DepositsPage() {
                       <Button
                         size="sm"
                         variant="secondary"
-                        onClick={() => {
-                          setReviewing(row);
-                          setAdminNote(row.admin_notes ?? "");
-                        }}
+                        onClick={() => openReview(row)}
+
                       >
                         {canReview ? "عرض ومراجعة" : "عرض"}
                       </Button>
@@ -423,6 +547,92 @@ function DepositsPage() {
                 </p>
               ) : null}
 
+              {isAdmin ? (
+                <div className="space-y-3 rounded-xl border border-border p-3">
+                  <div>
+                    <p className="text-sm font-bold">تصحيح بيانات التوريد</p>
+                    <p className="text-xs text-muted-foreground">
+                      لو فيه خطأ في المبلغ أو الفواتير أو التاريخ، عدّلها هنا واحفظ التصحيح.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">تاريخ التوريد</Label>
+                      <Input
+                        type="date"
+                        value={fix.date}
+                        onChange={(e) => setFix({ ...fix, date: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">وقت التوريد</Label>
+                      <Input
+                        type="time"
+                        value={fix.time}
+                        onChange={(e) => setFix({ ...fix, time: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">عدد الفواتير</Label>
+                      <Input
+                        dir="ltr"
+                        inputMode="numeric"
+                        value={fix.invoices}
+                        onChange={(e) => setFix({ ...fix, invoices: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">المبلغ</Label>
+                      <Input
+                        dir="ltr"
+                        inputMode="decimal"
+                        value={fix.amount}
+                        onChange={(e) => setFix({ ...fix, amount: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">ملاحظات المحصل</Label>
+                      <Input
+                        value={fix.notes}
+                        onChange={(e) => setFix({ ...fix, notes: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">حالة المراجعة</Label>
+                      <Select
+                        value={fix.status}
+                        onValueChange={(v) =>
+                          setFix({ ...fix, status: v as "pending" | "approved" | "rejected" })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">في انتظار المراجعة</SelectItem>
+                          <SelectItem value="approved">تمت المراجعة</SelectItem>
+                          <SelectItem value="rejected">يحتاج تصحيح</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={fixDeposit.isPending}
+                    onClick={() => reviewing && fixDeposit.mutate(reviewing)}
+                  >
+                    {fixDeposit.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Save className="size-4" />
+                    )}
+                    حفظ التصحيح
+                  </Button>
+                </div>
+              ) : null}
+
+
               <ReceiptFull path={reviewing.receipt_image_url} />
 
               <div className="space-y-2">
@@ -469,6 +679,130 @@ function DepositsPage() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={manualOpen} onOpenChange={(o) => !o && setManualOpen(false)}>
+        <DialogContent dir="rtl" className="max-h-[92vh] max-w-lg overflow-auto">
+          <DialogHeader className="text-right">
+            <DialogTitle>إضافة توريد لمحصل</DialogTitle>
+            <DialogDescription>
+              لتسجيل توريد قديم أو بتاريخ معين بدون صورة إيصال. الفرع يُؤخذ من حساب المحصل.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1 sm:col-span-2">
+              <Label className="text-xs">المحصل</Label>
+              <Select
+                value={manual.collector}
+                onValueChange={(v) => setManual({ ...manual, collector: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر المحصل" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(options?.collectors ?? []).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <Label className="text-xs">المنطقة (اختياري)</Label>
+              <Select value={manual.area} onValueChange={(v) => setManual({ ...manual, area: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="منطقة حساب المحصل" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>منطقة حساب المحصل</SelectItem>
+                  {(options?.areas ?? []).map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">تاريخ التوريد</Label>
+              <Input
+                type="date"
+                value={manual.date}
+                onChange={(e) => setManual({ ...manual, date: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">وقت التوريد</Label>
+              <Input
+                type="time"
+                value={manual.time}
+                onChange={(e) => setManual({ ...manual, time: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">عدد الفواتير</Label>
+              <Input
+                dir="ltr"
+                inputMode="numeric"
+                value={manual.invoices}
+                onChange={(e) => setManual({ ...manual, invoices: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">المبلغ</Label>
+              <Input
+                dir="ltr"
+                inputMode="decimal"
+                value={manual.amount}
+                onChange={(e) => setManual({ ...manual, amount: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <Label className="text-xs">حالة المراجعة</Label>
+              <Select
+                value={manual.status}
+                onValueChange={(v) => setManual({ ...manual, status: v as "approved" | "pending" })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="approved">تمت المراجعة</SelectItem>
+                  <SelectItem value="pending">في انتظار المراجعة</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <Label className="text-xs">ملاحظات</Label>
+              <Textarea
+                rows={2}
+                value={manual.notes}
+                onChange={(e) => setManual({ ...manual, notes: e.target.value })}
+                placeholder="سبب الإضافة اليدوية"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              className="flex-1"
+              disabled={addManual.isPending}
+              onClick={() => addManual.mutate()}
+            >
+              {addManual.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Plus className="size-4" />
+              )}
+              حفظ التوريد
+            </Button>
+            <Button variant="secondary" className="flex-1" onClick={() => setManualOpen(false)}>
+              إلغاء
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+
 
       <Dialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
         <DialogContent dir="rtl" className="max-w-md">

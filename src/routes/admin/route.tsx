@@ -32,30 +32,40 @@ export const Route = createFileRoute("/admin")({
   component: AdminLayout,
 });
 
+const COMPUTER_NAV = [
+  { to: "/admin/collections", label: "شاشة التحصيل الكمبيوتر", icon: Gauge, need: null },
+] as const;
+
 const NAV = [
   { to: "/admin/dashboard", label: "الرئيسية", icon: LayoutDashboard, need: null },
   { to: "/admin/collectors", label: "المحصلون", icon: Users, need: null },
   { to: "/admin/new-user", label: "إنشاء مستخدم", icon: UserPlus, need: "collectors" },
   { to: "/admin/deposits", label: "التوريدات", icon: ClipboardList, need: null },
-  {
-    to: "/admin/collections",
-    label: "التحصيل ونسب التحصيل ( الشاشة )",
-    icon: Gauge,
-    need: null,
-  },
   { to: "/admin/branches", label: "الفروع والمناطق", icon: Building2, need: null },
   { to: "/admin/reports", label: "التقارير", icon: BarChart3, need: null },
   { to: "/admin/audit", label: "سجل العمليات", icon: BadgeCheck, need: null },
   { to: "/admin/settings", label: "الإعدادات", icon: Settings2, need: null },
 ] as const;
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
-  const { data: auth } = useAuth();
-  const items = NAV.filter(
-    (item) => !item.need || auth?.permissions[item.need as "collectors"] !== false,
-  );
+type NavItem = {
+  to: string;
+  label: string;
+  icon: typeof Gauge;
+  need: string | null;
+};
+
+function NavGroup({
+  title,
+  items,
+  onNavigate,
+}: {
+  title: string;
+  items: readonly NavItem[];
+  onNavigate?: (() => void) | undefined;
+}) {
   return (
-    <nav className="space-y-1">
+    <div className="space-y-1">
+      <p className="px-3 pb-1 text-[11px] font-bold text-muted-foreground">{title}</p>
       {items.map((item) => (
         <Link
           key={item.to}
@@ -69,9 +79,27 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
           {item.label}
         </Link>
       ))}
+    </div>
+  );
+}
+
+function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+  const { data: auth } = useAuth();
+  const items = NAV.filter(
+    (item) => !item.need || auth?.permissions[item.need as "collectors"] !== false,
+  );
+  return (
+    <nav className="space-y-5">
+      <NavGroup title="شاشة التحصيل الكمبيوتر" items={COMPUTER_NAV} onNavigate={onNavigate} />
+      <NavGroup
+        title="شاشة التحصيل والتوريد للمحصلين"
+        items={items as readonly NavItem[]}
+        onNavigate={onNavigate}
+      />
     </nav>
   );
 }
+
 
 function AdminLayout() {
   const { data: auth } = useAuth();

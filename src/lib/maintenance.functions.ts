@@ -81,3 +81,105 @@ export const deleteCollectionCycle = createServerFn({ method: "POST" })
     );
     return { ok: true };
   });
+
+const dateTime = (date: string, time: string) => new Date(`${date}T${time || "12:00"}:00`).toISOString();
+
+/** Admin fix for a deposit that has wrong data (amount, invoices, date, notes, review state). */
+export const updateDepositDetails = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        invoices_count: z.number().int().min(0),
+        amount: z.number().min(0),
+        notes: z.string().optional().nullable(),
+        admin_notes: z.string().optional().nullable(),
+        entry_date: z.string().min(8),
+        entry_time: z.string().optional().default("12:00"),
+        status: z.enum(["pending", "approved", "rejected"]),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { userId, supabase } = context as never as { userId: string; supabase: any };
+    await requireAdmin(supabase, userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: target } = await supabaseAdmin
+      .from("deposits")
+      .select("id, ref")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!target) throw new Error("التوريد غير موجود");
+
+    const { error } = await supabaseAdmin
+      .from("deposits")
+      .update({
+        invoices_count: data.invoices_count,
+        amount: data.amount,
+        notes: data.notes?.trim() || null,
+        admin_notes: data.admin_notes?.trim() || null,
+        status: data.status,
+        created_at: dateTime(data.entry_date, data.entry_time ?? "12:00"),
+        reviewed_at: data.status === "pending" ? null : new Date().toISOString(),
+        reviewed_by: data.status === "pending" ? null : userId,
+      })
+      .eq("id", data.id);
+    if (error) throw new Error("تعذر حفظ تعديل التوريد");
+
+    await log(userId, "تعديل توريد", `تم تصحيح بيانات العملية رقم ${target.ref}`);
+    return { ok: true };
+  });
+
+/** Admin adds a deposit on behalf of a collector, with any past date. */
+export const createManualDeposit = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z
+      .object({
+        collector_id: z.string().uuid("اختر المحصل"),
+        area_id: z.string().uuid().optional().nullable(),
+        invoices_count: z.number().int().min(0),
+        amount: z.number().min(0),
+        notes: z.string().optional().nullable(),
+        entry_date: z.string().min(8, "أدخل تاريخ التوريد"),
+        entry_time: z.string().optional().default("12:00"),
+        status: z.enum(["pending", "approved"]).default("approved"),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { userId, supabase } = context as never as { userId: string; supabase: any };
+    await requireAdmin(supabase, userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("id, full_name, branch_id, area_id")
+      .eq("id", data.collector_id)
+      .maybeSingle();
+    if (!profile) throw new Error("المحصل غير موجود");
+
+    const { error } = await supabaseAdmin.from("deposits").insert({
+      collector_id: data.collector_id,
+      branch_id: profile.branch_id,
+      area_id: data.area_id || profile.area_id,
+      invoices_count: data.invoices_count,
+      amount: data.amount,
+      receipt_image_url: "",
+      notes: data.notes?.trim() || "أضافها مدير النظام يدويًا",
+      status: data.status,
+      reviewed_at: data.status === "approved" ? new Date().toISOString() : null,
+      reviewed_by: data.status === "approved" ? userId : null,
+      created_at: dateTime(data.entry_date, data.entry_time ?? "12:00"),
+    });
+    if (error) throw new Error("تعذر إضافة التوريد");
+
+    await log(
+      userId,
+      "إضافة توريد يدويًا",
+      `تمت إضافة توريد للمحصل ${profile.full_name} بتاريخ ${data.entry_date}`,
+    );
+    return { ok: true };
+  });

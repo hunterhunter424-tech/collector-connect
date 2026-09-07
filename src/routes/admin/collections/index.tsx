@@ -24,9 +24,9 @@ import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute("/admin/collections/")({
   head: () => ({ meta: [
-    { title: "التحصيل ونسب التحصيل | نظام توريدات المحصلين" },
+    { title: "شاشة التحصيل الكمبيوتر | نظام توريدات المحصلين" },
     { name: "description", content: "إدارة دورات التحصيل والربط ونسب التحصيل والمقارنات الشهرية." },
-    { property: "og:title", content: "التحصيل ونسب التحصيل | نظام توريدات المحصلين" },
+    { property: "og:title", content: "شاشة التحصيل الكمبيوتر | نظام توريدات المحصلين" },
     { property: "og:description", content: "متابعة دورات التحصيل والإيرادات والمقارنات الشهرية." },
     { property: "og:type", content: "website" },
     { name: "twitter:card", content: "summary" },
@@ -128,7 +128,7 @@ function CollectionsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><h1 className="text-xl font-bold">التحصيل ونسب التحصيل</h1><p className="text-sm text-muted-foreground">دورات مستقلة للربط والتحصيل والإيرادات الأخرى</p></div>
+        <div><h1 className="text-xl font-bold">شاشة التحصيل الكمبيوتر</h1><p className="text-sm text-muted-foreground">دورات مستقلة للربط والتحصيل والإيرادات الأخرى</p></div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild><Button disabled={!auth?.permissions.collections}><Plus className="size-4" /> إنشاء دورة جديدة</Button></DialogTrigger>
           <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
