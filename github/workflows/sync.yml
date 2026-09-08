@@ -1,15 +1,18 @@
+```yaml
 name: Sync Fork
 
 on:
   schedule:
-    # يعمل تلقائياً كل 24 ساعة في منتصف الليل
+    # يعمل تلقائياً في بداية كل ساعة
     - cron: '0 * * * *'
-  # يتيح لك تشغيل المزامنة يدوياً في أي وقت بضغطة زر
+
+  # يتيح تشغيل المزامنة يدوياً من GitHub
   workflow_dispatch:
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
 
