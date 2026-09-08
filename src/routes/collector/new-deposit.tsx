@@ -68,9 +68,10 @@ function NewDepositPage() {
     mutationFn: async () => {
       if (!profile) throw new Error("لم يتم تحميل بيانات الحساب");
       if (!file) throw new Error("صورة إيصال التوريد مطلوبة");
-      const count = Number(invoices);
+      const rawInvoices = invoices.trim();
+      const count = rawInvoices === "" ? 0 : Number(rawInvoices);
       const value = Number(amount);
-      if (!Number.isFinite(count) || count <= 0) throw new Error("أدخل عدد فواتير صحيح");
+      if (!Number.isFinite(count) || count < 0) throw new Error("أدخل عدد فواتير صحيح أو اتركه فارغًا");
       if (!Number.isFinite(value) || value <= 0) throw new Error("أدخل مبلغًا صحيحًا");
       if (multiArea && !selectedArea) throw new Error("اختر المنطقة التي تورّد عنها");
 
@@ -175,12 +176,13 @@ function NewDepositPage() {
         </Button>
 
         <div className="space-y-2">
-          <Label htmlFor="invoices">عدد الفواتير</Label>
+          <Label htmlFor="invoices">عدد الفواتير (اختياري)</Label>
           <Input
             id="invoices"
             type="number"
             inputMode="numeric"
-            min={1}
+            min={0}
+            placeholder="اتركه فارغًا لو مش متوفر"
             className="h-12 text-lg"
             value={invoices}
             onChange={(e) => setInvoices(e.target.value)}
