@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Camera, Loader2, Send } from "lucide-react";
+import { Camera, ImagePlus, Loader2, Send } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -37,6 +37,7 @@ function NewDepositPage() {
   const { data: auth } = useAuth();
   const profile = auth?.profile;
   const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -147,10 +148,17 @@ function NewDepositPage() {
         }}
       >
         <input
-          ref={fileRef}
+          ref={cameraRef}
           type="file"
           accept="image/jpeg,image/jpg,image/png,image/webp"
           capture="environment"
+          className="hidden"
+          onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+        />
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/jpeg,image/jpg,image/png,image/webp"
           className="hidden"
           onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
         />
@@ -165,15 +173,26 @@ function NewDepositPage() {
           </button>
         ) : null}
 
-        <Button
-          type="button"
-          variant={preview ? "outline" : "default"}
-          className="h-16 w-full text-base font-bold"
-          onClick={() => fileRef.current?.click()}
-        >
-          <Camera className="size-6" />
-          {preview ? "تغيير صورة الإيصال" : "تصوير إيصال التوريد"}
-        </Button>
+        <div className="grid grid-cols-2 gap-3">
+          <Button
+            type="button"
+            variant={preview ? "outline" : "default"}
+            className="h-16 w-full text-base font-bold"
+            onClick={() => cameraRef.current?.click()}
+          >
+            <Camera className="size-6" />
+            {preview ? "تصوير من جديد" : "تصوير الإيصال"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-16 w-full text-base font-bold"
+            onClick={() => fileRef.current?.click()}
+          >
+            <ImagePlus className="size-6" />
+            اختيار من الملفات
+          </Button>
+        </div>
 
         <div className="space-y-2">
           <Label htmlFor="invoices">عدد الفواتير (اختياري)</Label>
