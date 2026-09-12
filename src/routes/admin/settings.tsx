@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Download, Eraser, ImageOff, Loader2, Settings2, Trash2, Upload } from "lucide-react";
@@ -41,8 +42,16 @@ export const Route = createFileRoute("/admin/settings")({
 
 function SettingsPage() {
   const { data: auth } = useAuth();
+  const queryClient = useQueryClient();
   const update = useServerFn(updateMyCredentials);
+  const [fullName, setFullName] = useState(auth?.profile?.full_name ?? "");
   const [username, setUsername] = useState(auth?.profile?.username ?? "");
+  useEffect(() => {
+    if (auth?.profile) {
+      setFullName(auth.profile.full_name ?? "");
+      setUsername(auth.profile.username ?? "");
+    }
+  }, [auth?.profile?.full_name, auth?.profile?.username]);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [saving, setSaving] = useState(false);
@@ -120,9 +129,15 @@ function SettingsPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const nextUser = username.trim().toLowerCase();
+    const nextName = fullName.trim();
     const changedUser = nextUser && nextUser !== (auth?.profile?.username ?? "");
-    if (!changedUser && !password) {
+    const changedName = nextName && nextName !== (auth?.profile?.full_name ?? "");
+    if (!changedUser && !changedName && !password) {
       toast.error("لا يوجد تغيير للحفظ");
+      return;
+    }
+    if (nextName && nextName.length < 3) {
+      toast.error("الاسم قصير جدًا");
       return;
     }
     if (password && password !== confirm) {
@@ -133,15 +148,21 @@ function SettingsPage() {
     try {
       await update({
         data: {
+          ...(changedName ? { fullName: nextName } : {}),
           ...(changedUser ? { username: nextUser } : {}),
           ...(password ? { password } : {}),
         },
       });
       setPassword("");
       setConfirm("");
-      toast.success("تم حفظ بيانات الدخول. سجّل الدخول من جديد بالبيانات الجديدة.");
-      await supabase.auth.signOut();
-      window.location.href = "/";
+      if (changedUser || password) {
+        toast.success("تم حفظ بيانات الدخول. سجّل الدخول من جديد بالبيانات الجديدة.");
+        await supabase.auth.signOut();
+        window.location.href = "/";
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: ["auth-state"] });
+      toast.success("تم حفظ الاسم");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "تعذر حفظ التعديلات");
     } finally {
@@ -177,11 +198,23 @@ function SettingsPage() {
           <Settings2 className="size-5" /> الإعدادات
         </h1>
         <p className="text-sm text-muted-foreground">
-          تعديل اسم المستخدم وكلمة المرور الخاصة بحسابك
+          تعديل الاسم واسم المستخدم وكلمة المرور الخاصة بحسابك
         </p>
       </div>
 
       <form onSubmit={onSubmit} className="card-elevated max-w-lg space-y-4 p-5">
+        <div className="space-y-2">
+          <Label htmlFor="full-name">الاسم</Label>
+          <Input
+            id="full-name"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="اسم مدير النظام"
+          />
+          <p className="text-xs text-muted-foreground">
+            هذا الاسم يظهر في سجل العمليات وفي مراجعة التوريدات
+          </p>
+        </div>
         <div className="space-y-2">
           <Label htmlFor="username">اسم المستخدم</Label>
           <Input

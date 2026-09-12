@@ -14,6 +14,8 @@ export type DepositRow = {
   admin_notes: string | null;
   created_at: string;
   reviewed_at: string | null;
+  reviewed_by: string | null;
+  reviewer_name: string | null;
   collector_name: string;
   collector_username: string;
   branch_name: string | null;
@@ -21,7 +23,7 @@ export type DepositRow = {
 };
 
 const SELECT =
-  "id, ref, collector_id, branch_id, area_id, invoices_count, amount, receipt_image_url, notes, status, admin_notes, created_at, reviewed_at, profiles!deposits_collector_profile_fkey(full_name, username), branches(name), areas(name)";
+  "id, ref, collector_id, branch_id, area_id, invoices_count, amount, receipt_image_url, notes, status, admin_notes, created_at, reviewed_at, reviewed_by, profiles!deposits_collector_profile_fkey(full_name, username), branches(name), areas(name)";
 
 export type DepositFilters = {
   collectorId?: string | undefined;
@@ -52,12 +54,26 @@ function mapRow(row: Record<string, unknown>): DepositRow {
     admin_notes: (row['admin_notes'] as string | null) ?? null,
     created_at: row['created_at'] as string,
     reviewed_at: (row['reviewed_at'] as string | null) ?? null,
+    reviewed_by: (row['reviewed_by'] as string | null) ?? null,
+    reviewer_name: null,
     collector_name: profile?.full_name ?? "-",
     collector_username: profile?.username ?? "-",
     branch_name: branch?.name ?? null,
     area_name: area?.name ?? null,
   };
 }
+
+async function attachReviewerNames(rows: DepositRow[]): Promise<DepositRow[]> {
+  const ids = [...new Set(rows.map((r) => r.reviewed_by).filter((v): v is string => !!v))];
+  if (ids.length === 0) return rows;
+  const { data } = await supabase.from("profiles").select("id, full_name").in("id", ids);
+  const names = new Map((data ?? []).map((p) => [p.id as string, p.full_name as string]));
+  return rows.map((r) => ({
+    ...r,
+    reviewer_name: r.reviewed_by ? (names.get(r.reviewed_by) ?? "مدير النظام") : null,
+  }));
+}
+
 
 export async function fetchDeposits(filters: DepositFilters = {}): Promise<DepositRow[]> {
   let query = supabase.from("deposits").select(SELECT).order("created_at", { ascending: false });
@@ -82,7 +98,7 @@ export async function fetchDeposits(filters: DepositFilters = {}): Promise<Depos
         .some((v) => String(v).toLowerCase().includes(term)),
     );
   }
-  return rows;
+  return attachReviewerNames(rows);
 }
 
 export function summarize(rows: DepositRow[]) {

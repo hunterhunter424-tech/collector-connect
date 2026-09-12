@@ -6,6 +6,7 @@ const EMAIL_DOMAIN = "tawreedat.app";
 
 const schema = z
   .object({
+    fullName: z.string().trim().min(3, "الاسم قصير جدًا").max(80).optional(),
     username: z
       .string()
       .min(3, "اسم المستخدم قصير جدًا")
@@ -14,7 +15,7 @@ const schema = z
       .optional(),
     password: z.string().min(6, "كلمة المرور 6 أحرف على الأقل").optional(),
   })
-  .refine((v) => v.username || v.password, { message: "لا يوجد تغيير" });
+  .refine((v) => v.username || v.password || v.fullName, { message: "لا يوجد تغيير" });
 
 /** Any signed-in user can change their own username and/or password. */
 export const updateMyCredentials = createServerFn({ method: "POST" })
@@ -46,10 +47,13 @@ export const updateMyCredentials = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(error.message);
 
-    if (newUsername) {
+    const profileUpdate: { username?: string; full_name?: string } = {};
+    if (newUsername) profileUpdate.username = newUsername;
+    if (data.fullName) profileUpdate.full_name = data.fullName.trim();
+    if (Object.keys(profileUpdate).length > 0) {
       const { error: pErr } = await supabaseAdmin
         .from("profiles")
-        .update({ username: newUsername })
+        .update(profileUpdate)
         .eq("id", userId);
       if (pErr) throw new Error(pErr.message);
     }
@@ -63,8 +67,9 @@ export const updateMyCredentials = createServerFn({ method: "POST" })
     await supabaseAdmin.from("audit_logs").insert({
       actor_id: userId,
       actor_name: (p?.full_name as string) ?? "مدير النظام",
-      action: "تعديل بيانات الدخول",
+      action: "تعديل بيانات الحساب",
       details: [
+        profileUpdate.full_name ? `تم تغيير الاسم إلى ${profileUpdate.full_name}` : null,
         newUsername ? `تم تغيير اسم المستخدم إلى ${newUsername}` : null,
         data.password ? "تم تغيير كلمة المرور" : null,
       ]

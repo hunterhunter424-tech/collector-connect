@@ -461,6 +461,7 @@ function DepositsPage() {
                 <th className="p-3 font-semibold">الوقت</th>
                 <th className="p-3 font-semibold">الإيصال</th>
                 <th className="p-3 font-semibold">الحالة</th>
+                <th className="p-3 font-semibold">تمت المراجعة بواسطة</th>
                 <th className="p-3 font-semibold">ملاحظات الإدارة</th>
                 <th className="p-3 font-semibold">مراجعة</th>
               </tr>
@@ -481,6 +482,20 @@ function DepositsPage() {
                   </td>
                   <td className="p-3">
                     <StatusBadge status={row.status} />
+                  </td>
+                  <td className="p-3 text-xs">
+                    {row.reviewer_name ? (
+                      <div className="space-y-0.5">
+                        <div className="font-semibold">{row.reviewer_name}</div>
+                        {row.reviewed_at ? (
+                          <div className="text-muted-foreground">
+                            {formatDate(row.reviewed_at)} - {formatTime(row.reviewed_at)}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
                   </td>
                   <td className="max-w-[180px] p-3 text-xs text-muted-foreground">
                     {row.admin_notes ?? "-"}
