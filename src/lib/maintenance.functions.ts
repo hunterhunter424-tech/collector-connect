@@ -110,14 +110,34 @@ export const updateDepositDetails = createServerFn({ method: "POST" })
 
     const { data: target } = await supabaseAdmin
       .from("deposits")
-      .select("id, ref")
+      .select("id, ref, collector_id, profiles!deposits_collector_profile_fkey(full_name)")
       .eq("id", data.id)
       .maybeSingle();
     if (!target) throw new Error("التوريد غير موجود");
 
+    const transfer = !!data.collector_id && data.collector_id !== target.collector_id;
+    let newCollector: { full_name: string; branch_id: string | null; area_id: string | null } | null =
+      null;
+    if (transfer) {
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("id, full_name, branch_id, area_id")
+        .eq("id", data.collector_id as string)
+        .maybeSingle();
+      if (!profile) throw new Error("المحصل الجديد غير موجود");
+      newCollector = profile as never;
+    }
+
     const { error } = await supabaseAdmin
       .from("deposits")
       .update({
+        ...(transfer && newCollector
+          ? {
+              collector_id: data.collector_id as string,
+              branch_id: newCollector.branch_id,
+              area_id: newCollector.area_id,
+            }
+          : {}),
         invoices_count: data.invoices_count,
         amount: data.amount,
         notes: data.notes?.trim() || null,
@@ -130,8 +150,20 @@ export const updateDepositDetails = createServerFn({ method: "POST" })
       .eq("id", data.id);
     if (error) throw new Error("تعذر حفظ تعديل التوريد");
 
-    await log(userId, "تعديل توريد", `تم تصحيح بيانات العملية رقم ${target.ref}`);
+    const oldName =
+      ((target as never as { profiles?: { full_name: string } | null }).profiles?.full_name) ??
+      "محصل سابق";
+    if (transfer && newCollector) {
+      await log(
+        userId,
+        "نقل توريد لمحصل آخر",
+        `تم نقل العملية رقم ${target.ref} من ${oldName} إلى ${newCollector.full_name}`,
+      );
+    } else {
+      await log(userId, "تعديل توريد", `تم تصحيح بيانات العملية رقم ${target.ref}`);
+    }
     return { ok: true };
+
   });
 
 /** Admin adds a deposit on behalf of a collector, with any past date. */
