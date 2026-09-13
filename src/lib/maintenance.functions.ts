@@ -116,8 +116,8 @@ export const updateDepositDetails = createServerFn({ method: "POST" })
     if (!target) throw new Error("التوريد غير موجود");
 
     const transfer = !!data.collector_id && data.collector_id !== target.collector_id;
-    let newCollector: { full_name: string; branch_id: string | null; area_id: string | null } | null =
-      null;
+    type NewCollector = { full_name: string; branch_id: string | null; area_id: string | null };
+    let newCollector: NewCollector | null = null;
     if (transfer) {
       const { data: profile } = await supabaseAdmin
         .from("profiles")
@@ -125,7 +125,7 @@ export const updateDepositDetails = createServerFn({ method: "POST" })
         .eq("id", data.collector_id as string)
         .maybeSingle();
       if (!profile) throw new Error("المحصل الجديد غير موجود");
-      newCollector = profile as unknown as typeof newCollector;
+      newCollector = profile as unknown as NewCollector;
     }
 
     const { error } = await supabaseAdmin
