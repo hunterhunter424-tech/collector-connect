@@ -157,6 +157,7 @@ function DepositsPage() {
   const [manualOpen, setManualOpen] = useState(false);
   const [manual, setManual] = useState(blankManual);
   const [fix, setFix] = useState({
+    collector: "",
     date: today,
     time: "12:00",
     invoices: "",
@@ -170,6 +171,7 @@ function DepositsPage() {
     setAdminNote(row.admin_notes ?? "");
     const created = new Date(row.created_at);
     setFix({
+      collector: row.collector_id,
       date: row.created_at.slice(0, 10),
       time: `${String(created.getHours()).padStart(2, "0")}:${String(created.getMinutes()).padStart(2, "0")}`,
       invoices: String(row.invoices_count),
@@ -194,6 +196,7 @@ function DepositsPage() {
       await saveDetails({
         data: {
           id: row.id,
+          collector_id: fix.collector || row.collector_id,
           invoices_count: invoices,
           amount,
           notes: fix.notes,
@@ -204,6 +207,7 @@ function DepositsPage() {
         },
       });
     },
+
     onSuccess: () => {
       toast.success("تم تصحيح بيانات التوريد");
       setReviewing(null);
@@ -461,7 +465,9 @@ function DepositsPage() {
                 <th className="p-3 font-semibold">الوقت</th>
                 <th className="p-3 font-semibold">الإيصال</th>
                 <th className="p-3 font-semibold">الحالة</th>
-                <th className="p-3 font-semibold">تمت المراجعة بواسطة</th>
+                {auth?.role === "admin" ? (
+                  <th className="p-3 font-semibold">تمت المراجعة بواسطة</th>
+                ) : null}
                 <th className="p-3 font-semibold">ملاحظات الإدارة</th>
                 <th className="p-3 font-semibold">مراجعة</th>
               </tr>
@@ -483,20 +489,22 @@ function DepositsPage() {
                   <td className="p-3">
                     <StatusBadge status={row.status} />
                   </td>
-                  <td className="p-3 text-xs">
-                    {row.reviewer_name ? (
-                      <div className="space-y-0.5">
-                        <div className="font-semibold">{row.reviewer_name}</div>
-                        {row.reviewed_at ? (
-                          <div className="text-muted-foreground">
-                            {formatDate(row.reviewed_at)} - {formatTime(row.reviewed_at)}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </td>
+                  {auth?.role === "admin" ? (
+                    <td className="p-3 text-xs">
+                      {row.reviewer_name ? (
+                        <div className="space-y-0.5">
+                          <div className="font-semibold">{row.reviewer_name}</div>
+                          {row.reviewed_at ? (
+                            <div className="text-muted-foreground">
+                              {formatDate(row.reviewed_at)} - {formatTime(row.reviewed_at)}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </td>
+                  ) : null}
                   <td className="max-w-[180px] p-3 text-xs text-muted-foreground">
                     {row.admin_notes ?? "-"}
                   </td>
@@ -567,11 +575,31 @@ function DepositsPage() {
                   <div>
                     <p className="text-sm font-bold">تصحيح بيانات التوريد</p>
                     <p className="text-xs text-muted-foreground">
-                      لو فيه خطأ في المبلغ أو الفواتير أو التاريخ، عدّلها هنا واحفظ التصحيح.
+                      لو فيه خطأ في المبلغ أو الفواتير أو التاريخ أو المحصل، عدّلها هنا واحفظ
+                      التصحيح.
                     </p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label className="text-xs">المحصل (نقل التوريد لمحصل آخر)</Label>
+                      <Select
+                        value={fix.collector}
+                        onValueChange={(v) => setFix({ ...fix, collector: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر المحصل" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(options?.collectors ?? []).map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="space-y-1">
+
                       <Label className="text-xs">تاريخ التوريد</Label>
                       <Input
                         type="date"
