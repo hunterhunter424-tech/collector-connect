@@ -125,7 +125,7 @@ export const updateDepositDetails = createServerFn({ method: "POST" })
         .eq("id", data.collector_id as string)
         .maybeSingle();
       if (!profile) throw new Error("المحصل الجديد غير موجود");
-      newCollector = profile as never;
+      newCollector = profile as unknown as typeof newCollector;
     }
 
     const { error } = await supabaseAdmin
