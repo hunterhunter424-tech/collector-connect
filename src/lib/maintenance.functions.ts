@@ -91,6 +91,7 @@ export const updateDepositDetails = createServerFn({ method: "POST" })
     z
       .object({
         id: z.string().uuid(),
+        collector_id: z.string().uuid().optional().nullable(),
         invoices_count: z.number().int().min(0),
         amount: z.number().min(0),
         notes: z.string().optional().nullable(),
@@ -99,6 +100,7 @@ export const updateDepositDetails = createServerFn({ method: "POST" })
         entry_time: z.string().optional().default("12:00"),
         status: z.enum(["pending", "approved", "rejected"]),
       })
+
       .parse(data),
   )
   .handler(async ({ data, context }) => {
