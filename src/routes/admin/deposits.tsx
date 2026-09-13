@@ -157,6 +157,7 @@ function DepositsPage() {
   const [manualOpen, setManualOpen] = useState(false);
   const [manual, setManual] = useState(blankManual);
   const [fix, setFix] = useState({
+    collector: "",
     date: today,
     time: "12:00",
     invoices: "",
@@ -170,6 +171,7 @@ function DepositsPage() {
     setAdminNote(row.admin_notes ?? "");
     const created = new Date(row.created_at);
     setFix({
+      collector: row.collector_id,
       date: row.created_at.slice(0, 10),
       time: `${String(created.getHours()).padStart(2, "0")}:${String(created.getMinutes()).padStart(2, "0")}`,
       invoices: String(row.invoices_count),
@@ -194,6 +196,7 @@ function DepositsPage() {
       await saveDetails({
         data: {
           id: row.id,
+          collector_id: fix.collector || row.collector_id,
           invoices_count: invoices,
           amount,
           notes: fix.notes,
@@ -204,6 +207,7 @@ function DepositsPage() {
         },
       });
     },
+
     onSuccess: () => {
       toast.success("تم تصحيح بيانات التوريد");
       setReviewing(null);
