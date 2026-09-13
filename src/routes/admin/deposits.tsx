@@ -575,11 +575,31 @@ function DepositsPage() {
                   <div>
                     <p className="text-sm font-bold">تصحيح بيانات التوريد</p>
                     <p className="text-xs text-muted-foreground">
-                      لو فيه خطأ في المبلغ أو الفواتير أو التاريخ، عدّلها هنا واحفظ التصحيح.
+                      لو فيه خطأ في المبلغ أو الفواتير أو التاريخ أو المحصل، عدّلها هنا واحفظ
+                      التصحيح.
                     </p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label className="text-xs">المحصل (نقل التوريد لمحصل آخر)</Label>
+                      <Select
+                        value={fix.collector}
+                        onValueChange={(v) => setFix({ ...fix, collector: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر المحصل" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(options?.collectors ?? []).map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="space-y-1">
+
                       <Label className="text-xs">تاريخ التوريد</Label>
                       <Input
                         type="date"
