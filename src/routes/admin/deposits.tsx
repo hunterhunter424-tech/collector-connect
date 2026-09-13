@@ -157,6 +157,7 @@ function DepositsPage() {
   const [manualOpen, setManualOpen] = useState(false);
   const [manual, setManual] = useState(blankManual);
   const [fix, setFix] = useState({
+    collector: "",
     date: today,
     time: "12:00",
     invoices: "",
@@ -170,6 +171,7 @@ function DepositsPage() {
     setAdminNote(row.admin_notes ?? "");
     const created = new Date(row.created_at);
     setFix({
+      collector: row.collector_id,
       date: row.created_at.slice(0, 10),
       time: `${String(created.getHours()).padStart(2, "0")}:${String(created.getMinutes()).padStart(2, "0")}`,
       invoices: String(row.invoices_count),
@@ -194,6 +196,7 @@ function DepositsPage() {
       await saveDetails({
         data: {
           id: row.id,
+          collector_id: fix.collector || row.collector_id,
           invoices_count: invoices,
           amount,
           notes: fix.notes,
@@ -204,6 +207,7 @@ function DepositsPage() {
         },
       });
     },
+
     onSuccess: () => {
       toast.success("تم تصحيح بيانات التوريد");
       setReviewing(null);
@@ -571,11 +575,31 @@ function DepositsPage() {
                   <div>
                     <p className="text-sm font-bold">تصحيح بيانات التوريد</p>
                     <p className="text-xs text-muted-foreground">
-                      لو فيه خطأ في المبلغ أو الفواتير أو التاريخ، عدّلها هنا واحفظ التصحيح.
+                      لو فيه خطأ في المبلغ أو الفواتير أو التاريخ أو المحصل، عدّلها هنا واحفظ
+                      التصحيح.
                     </p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label className="text-xs">المحصل (نقل التوريد لمحصل آخر)</Label>
+                      <Select
+                        value={fix.collector}
+                        onValueChange={(v) => setFix({ ...fix, collector: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر المحصل" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(options?.collectors ?? []).map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="space-y-1">
+
                       <Label className="text-xs">تاريخ التوريد</Label>
                       <Input
                         type="date"
