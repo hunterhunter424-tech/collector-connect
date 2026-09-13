@@ -485,20 +485,22 @@ function DepositsPage() {
                   <td className="p-3">
                     <StatusBadge status={row.status} />
                   </td>
-                  <td className="p-3 text-xs">
-                    {row.reviewer_name ? (
-                      <div className="space-y-0.5">
-                        <div className="font-semibold">{row.reviewer_name}</div>
-                        {row.reviewed_at ? (
-                          <div className="text-muted-foreground">
-                            {formatDate(row.reviewed_at)} - {formatTime(row.reviewed_at)}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </td>
+                  {auth?.role === "admin" ? (
+                    <td className="p-3 text-xs">
+                      {row.reviewer_name ? (
+                        <div className="space-y-0.5">
+                          <div className="font-semibold">{row.reviewer_name}</div>
+                          {row.reviewed_at ? (
+                            <div className="text-muted-foreground">
+                              {formatDate(row.reviewed_at)} - {formatTime(row.reviewed_at)}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </td>
+                  ) : null}
                   <td className="max-w-[180px] p-3 text-xs text-muted-foreground">
                     {row.admin_notes ?? "-"}
                   </td>
