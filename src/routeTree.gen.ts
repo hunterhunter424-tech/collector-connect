@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as CollectorRouteRouteImport } from './routes/collector/route'
+import { Route as AdminAnnouncementsRouteImport } from './routes/admin/announcements'
 import { Route as AdminAuditRouteImport } from './routes/admin/audit'
 import { Route as AdminBranchesRouteImport } from './routes/admin/branches'
 import { Route as AdminCollectorsRouteImport } from './routes/admin/collectors'
@@ -40,6 +41,11 @@ const CollectorRouteRoute = CollectorRouteRouteImport.update({
   id: '/collector',
   path: '/collector',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAnnouncementsRoute = AdminAnnouncementsRouteImport.update({
+  id: '/announcements',
+  path: '/announcements',
+  getParentRoute: () => AdminRouteRoute,
 } as any)
 const AdminAuditRoute = AdminAuditRouteImport.update({
   id: '/audit',
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteRouteWithChildren
   '/collector': typeof CollectorRouteRouteWithChildren
+  '/admin/announcements': typeof AdminAnnouncementsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/branches': typeof AdminBranchesRoute
   '/admin/collectors': typeof AdminCollectorsRoute
@@ -129,6 +136,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteRouteWithChildren
   '/collector': typeof CollectorRouteRouteWithChildren
+  '/admin/announcements': typeof AdminAnnouncementsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/branches': typeof AdminBranchesRoute
   '/admin/collectors': typeof AdminCollectorsRoute
@@ -148,6 +156,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteRouteWithChildren
   '/collector': typeof CollectorRouteRouteWithChildren
+  '/admin/announcements': typeof AdminAnnouncementsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/branches': typeof AdminBranchesRoute
   '/admin/collectors': typeof AdminCollectorsRoute
@@ -168,6 +177,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/collector'
+    | '/admin/announcements'
     | '/admin/audit'
     | '/admin/branches'
     | '/admin/collectors'
@@ -186,6 +196,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/collector'
+    | '/admin/announcements'
     | '/admin/audit'
     | '/admin/branches'
     | '/admin/collectors'
@@ -204,6 +215,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/collector'
+    | '/admin/announcements'
     | '/admin/audit'
     | '/admin/branches'
     | '/admin/collectors'
@@ -247,6 +259,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/collector'
       preLoaderRoute: typeof CollectorRouteRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/admin/announcements': {
+      id: '/admin/announcements'
+      path: '/announcements'
+      fullPath: '/admin/announcements'
+      preLoaderRoute: typeof AdminAnnouncementsRouteImport
+      parentRoute: typeof AdminRouteRoute
     }
     '/admin/audit': {
       id: '/admin/audit'
@@ -343,6 +362,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteRouteChildren {
+  AdminAnnouncementsRoute: typeof AdminAnnouncementsRoute
   AdminAuditRoute: typeof AdminAuditRoute
   AdminBranchesRoute: typeof AdminBranchesRoute
   AdminCollectorsRoute: typeof AdminCollectorsRoute
@@ -356,6 +376,7 @@ interface AdminRouteRouteChildren {
 }
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
+  AdminAnnouncementsRoute: AdminAnnouncementsRoute,
   AdminAuditRoute: AdminAuditRoute,
   AdminBranchesRoute: AdminBranchesRoute,
   AdminCollectorsRoute: AdminCollectorsRoute,

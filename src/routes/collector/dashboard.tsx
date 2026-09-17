@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Banknote, ClipboardList, FilePlus2, Receipt, Wallet } from "lucide-react";
+import { Banknote, ClipboardList, FilePlus2, Megaphone, Receipt, Wallet } from "lucide-react";
 
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { fetchDeposits, summarize } from "@/lib/deposits";
 import { formatMoney, formatNumber, isoDayStart } from "@/lib/format";
@@ -31,6 +32,21 @@ function CollectorDashboard() {
     queryFn: () => fetchDeposits({ collectorId: profile!.id, from: isoDayStart() }),
   });
 
+  const { data: notices } = useQuery({
+    queryKey: ["my-announcements", profile?.id],
+    enabled: !!profile?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("announcements")
+        .select("id, message")
+        .eq("active", true)
+        .or(`target_user_id.is.null,target_user_id.eq.${profile!.id}`)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as { id: string; message: string }[];
+    },
+  });
+
   const stats = summarize(today ?? []);
 
   return (
@@ -47,6 +63,20 @@ function CollectorDashboard() {
           </span>
         </div>
       </section>
+
+      {(notices ?? []).map((notice) => (
+        <div
+          key={notice.id}
+          className="card-elevated flex items-start gap-3 border-s-4 border-primary p-4"
+          role="status"
+        >
+          <Megaphone className="mt-0.5 size-5 shrink-0 text-primary" />
+          <div>
+            <p className="text-sm font-bold">رسالة من الإدارة</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{notice.message}</p>
+          </div>
+        </div>
+      ))}
 
       <Button asChild className="h-16 w-full text-lg font-bold shadow-lg">
         <Link to="/collector/new-deposit">

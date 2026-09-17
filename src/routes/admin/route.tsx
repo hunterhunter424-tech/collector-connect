@@ -8,6 +8,7 @@ import {
   Gauge,
   LayoutDashboard,
   LogOut,
+  Megaphone,
   Menu,
   Search,
   Settings2,
@@ -43,6 +44,7 @@ const NAV = [
   { to: "/admin/deposits", label: "التوريدات", icon: ClipboardList, need: null },
   { to: "/admin/branches", label: "الفروع والمناطق", icon: Building2, need: null },
   { to: "/admin/reports", label: "التقارير", icon: BarChart3, need: null },
+  { to: "/admin/announcements", label: "رسائل المحصلين", icon: Megaphone, need: "collectors" },
   { to: "/admin/audit", label: "سجل العمليات", icon: BadgeCheck, need: null },
   { to: "/admin/settings", label: "الإعدادات", icon: Settings2, need: null },
 ] as const;
