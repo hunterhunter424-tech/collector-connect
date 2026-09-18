@@ -557,9 +557,11 @@ export type Database = {
           branch_id: string | null
           collector_id: string
           created_at: string
+          current_reading: number | null
           id: string
           images: string[]
           notes: string | null
+          previous_reading: number | null
           reading: number
           reviewed: boolean
           reviewed_at: string | null
@@ -572,9 +574,11 @@ export type Database = {
           branch_id?: string | null
           collector_id: string
           created_at?: string
+          current_reading?: number | null
           id?: string
           images?: string[]
           notes?: string | null
+          previous_reading?: number | null
           reading?: number
           reviewed?: boolean
           reviewed_at?: string | null
@@ -587,9 +591,11 @@ export type Database = {
           branch_id?: string | null
           collector_id?: string
           created_at?: string
+          current_reading?: number | null
           id?: string
           images?: string[]
           notes?: string | null
+          previous_reading?: number | null
           reading?: number
           reviewed?: boolean
           reviewed_at?: string | null

@@ -34,6 +34,8 @@ type Row = {
   id: string;
   subscription_no: string;
   reading: number;
+  previous_reading: number | null;
+  current_reading: number | null;
   notes: string | null;
   images: string[];
   reviewed: boolean;
@@ -48,7 +50,15 @@ function HighReadingsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [subscriptionNo, setSubscriptionNo] = useState("");
-  const [reading, setReading] = useState("");
+  const [previousReading, setPreviousReading] = useState("");
+  const [currentReading, setCurrentReading] = useState("");
+  const diff =
+    previousReading !== "" &&
+    currentReading !== "" &&
+    Number.isFinite(Number(previousReading)) &&
+    Number.isFinite(Number(currentReading))
+      ? Number(currentReading) - Number(previousReading)
+      : null;
   const [notes, setNotes] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -59,7 +69,9 @@ function HighReadingsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("high_readings")
-        .select("id, subscription_no, reading, notes, images, reviewed, created_at")
+        .select(
+          "id, subscription_no, reading, previous_reading, current_reading, notes, images, reviewed, created_at",
+        )
         .eq("collector_id", profile!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -88,8 +100,14 @@ function HighReadingsPage() {
     mutationFn: async () => {
       if (!profile) throw new Error("لم يتم تحميل بيانات الحساب");
       if (!subscriptionNo.trim()) throw new Error("أدخل رقم الاشتراك");
-      const value = Number(reading);
-      if (!Number.isFinite(value) || value <= 0) throw new Error("أدخل القراءة العالية بشكل صحيح");
+      const prev = Number(previousReading);
+      const curr = Number(currentReading);
+      if (previousReading === "" || !Number.isFinite(prev) || prev < 0)
+        throw new Error("أدخل القراءة السابقة بشكل صحيح");
+      if (currentReading === "" || !Number.isFinite(curr) || curr < 0)
+        throw new Error("أدخل القراءة الحالية بشكل صحيح");
+      const value = curr - prev;
+      if (value <= 0) throw new Error("القراءة الحالية يجب أن تكون أكبر من السابقة");
 
       const paths: string[] = [];
       for (const file of files) {
@@ -111,6 +129,8 @@ function HighReadingsPage() {
         area_id: profile.area_id,
         subscription_no: subscriptionNo.trim(),
         reading: value,
+        previous_reading: prev,
+        current_reading: curr,
         notes: notes.trim() || null,
         images: paths,
       });
@@ -122,7 +142,8 @@ function HighReadingsPage() {
     onSuccess: () => {
       toast.success("تم حفظ القراءة بنجاح");
       setSubscriptionNo("");
-      setReading("");
+      setPreviousReading("");
+      setCurrentReading("");
       setNotes("");
       setFiles([]);
       setPreviews([]);
@@ -158,17 +179,42 @@ function HighReadingsPage() {
           />
         </div>
 
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="prev-reading">القراءة السابقة</Label>
+            <Input
+              id="prev-reading"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.01"
+              className="h-12 text-lg"
+              value={previousReading}
+              onChange={(e) => setPreviousReading(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="curr-reading">القراءة الحالية</Label>
+            <Input
+              id="curr-reading"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.01"
+              className="h-12 text-lg"
+              value={currentReading}
+              onChange={(e) => setCurrentReading(e.target.value)}
+            />
+          </div>
+        </div>
+
         <div className="space-y-2">
-          <Label htmlFor="reading">القراءة العالية</Label>
+          <Label htmlFor="diff-reading">فرق القراءة</Label>
           <Input
-            id="reading"
-            type="number"
-            inputMode="decimal"
-            min={0}
-            step="0.01"
-            className="h-12 text-lg"
-            value={reading}
-            onChange={(e) => setReading(e.target.value)}
+            id="diff-reading"
+            readOnly
+            className="h-12 bg-secondary/60 text-lg font-bold"
+            value={diff === null ? "" : formatNumber(diff)}
           />
         </div>
 
@@ -242,9 +288,23 @@ function HighReadingsPage() {
                 <span className="font-bold">اشتراك {row.subscription_no}</span>
                 <span className="text-xs text-muted-foreground">{formatDateTime(row.created_at)}</span>
               </div>
-              <div className="flex items-center justify-between rounded-lg bg-secondary/60 px-3 py-2">
-                <span className="text-muted-foreground">القراءة</span>
-                <span className="font-semibold">{formatNumber(row.reading)}</span>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="flex items-center justify-between rounded-lg bg-secondary/60 px-3 py-2">
+                  <span className="text-muted-foreground">السابقة</span>
+                  <span className="font-semibold">
+                    {row.previous_reading === null ? "-" : formatNumber(row.previous_reading)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-lg bg-secondary/60 px-3 py-2">
+                  <span className="text-muted-foreground">الحالية</span>
+                  <span className="font-semibold">
+                    {row.current_reading === null ? "-" : formatNumber(row.current_reading)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-lg bg-primary/10 px-3 py-2">
+                  <span className="text-muted-foreground">فرق القراءة</span>
+                  <span className="font-bold text-primary">{formatNumber(row.reading)}</span>
+                </div>
               </div>
               {row.notes ? <p className="text-muted-foreground">{row.notes}</p> : null}
               {row.images?.length ? (

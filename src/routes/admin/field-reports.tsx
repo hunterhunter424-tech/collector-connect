@@ -47,6 +47,8 @@ type Row = {
   property_no?: string;
   subscription_no?: string;
   reading?: number;
+  previous_reading?: number | null;
+  current_reading?: number | null;
   subscriptions?: string | null;
   notes: string | null;
   images: string[];
@@ -58,7 +60,7 @@ type Row = {
 function useRows(table: Table) {
   const select =
     table === "high_readings"
-      ? "id, subscription_no, reading, notes, images, reviewed, created_at, profiles!high_readings_collector_id_fkey(full_name)"
+      ? "id, subscription_no, reading, previous_reading, current_reading, notes, images, reviewed, created_at, profiles!high_readings_collector_id_fkey(full_name)"
       : `id, property_no, subscriptions, notes, images, created_at, profiles!${table}_collector_id_fkey(full_name)`;
   return useQuery({
     queryKey: [table, "admin"],
@@ -157,7 +159,17 @@ function ReportList({ table, subsLabel }: { table: Table; subsLabel: string }) {
             </div>
             <p className="text-muted-foreground">المحصل: {row.profiles?.full_name ?? "-"}</p>
             {table === "high_readings" ? (
-              <p className="text-muted-foreground">القراءة: {formatNumber(row.reading)}</p>
+              <div className="space-y-1 text-muted-foreground">
+                <p>
+                  القراءة السابقة:{" "}
+                  {row.previous_reading == null ? "-" : formatNumber(row.previous_reading)}
+                </p>
+                <p>
+                  القراءة الحالية:{" "}
+                  {row.current_reading == null ? "-" : formatNumber(row.current_reading)}
+                </p>
+                <p className="font-semibold text-foreground">فرق القراءة: {formatNumber(row.reading)}</p>
+              </div>
             ) : row.subscriptions ? (
               <p className="whitespace-pre-wrap text-muted-foreground">
                 {subsLabel}: {row.subscriptions}
