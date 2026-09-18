@@ -1,6 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Banknote, ClipboardList, FilePlus2, Megaphone, Receipt, Wallet } from "lucide-react";
+import {
+  Banknote,
+  ClipboardList,
+  FilePlus2,
+  Gauge,
+  Hammer,
+  Home,
+  Megaphone,
+  Receipt,
+  Wallet,
+} from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -109,6 +119,24 @@ function CollectorDashboard() {
           <ClipboardList className="size-5" /> توريداتي
         </Link>
       </Button>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Button asChild variant="outline" className="h-14 w-full text-base">
+          <Link to="/collector/abandoned">
+            <Home className="size-5" /> العقارات المهجورة
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="h-14 w-full text-base">
+          <Link to="/collector/high-readings">
+            <Gauge className="size-5" /> القراءات العالية
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="h-14 w-full text-base">
+          <Link to="/collector/demolished">
+            <Hammer className="size-5" /> العقارات المهدومة
+          </Link>
+        </Button>
+      </div>
     </div>
   );
 }

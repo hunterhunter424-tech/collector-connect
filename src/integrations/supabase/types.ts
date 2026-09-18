@@ -14,6 +14,67 @@ export type Database = {
   }
   public: {
     Tables: {
+      abandoned_properties: {
+        Row: {
+          area_id: string | null
+          branch_id: string | null
+          collector_id: string
+          created_at: string
+          id: string
+          images: string[]
+          notes: string | null
+          property_no: string
+          subscriptions: string | null
+          updated_at: string
+        }
+        Insert: {
+          area_id?: string | null
+          branch_id?: string | null
+          collector_id: string
+          created_at?: string
+          id?: string
+          images?: string[]
+          notes?: string | null
+          property_no: string
+          subscriptions?: string | null
+          updated_at?: string
+        }
+        Update: {
+          area_id?: string | null
+          branch_id?: string | null
+          collector_id?: string
+          created_at?: string
+          id?: string
+          images?: string[]
+          notes?: string | null
+          property_no?: string
+          subscriptions?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "abandoned_properties_area_id_fkey"
+            columns: ["area_id"]
+            isOneToOne: false
+            referencedRelation: "areas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "abandoned_properties_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "abandoned_properties_collector_id_fkey"
+            columns: ["collector_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       announcements: {
         Row: {
           active: boolean
@@ -356,6 +417,67 @@ export type Database = {
           },
         ]
       }
+      demolished_properties: {
+        Row: {
+          area_id: string | null
+          branch_id: string | null
+          collector_id: string
+          created_at: string
+          id: string
+          images: string[]
+          notes: string | null
+          property_no: string
+          subscriptions: string | null
+          updated_at: string
+        }
+        Insert: {
+          area_id?: string | null
+          branch_id?: string | null
+          collector_id: string
+          created_at?: string
+          id?: string
+          images?: string[]
+          notes?: string | null
+          property_no: string
+          subscriptions?: string | null
+          updated_at?: string
+        }
+        Update: {
+          area_id?: string | null
+          branch_id?: string | null
+          collector_id?: string
+          created_at?: string
+          id?: string
+          images?: string[]
+          notes?: string | null
+          property_no?: string
+          subscriptions?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demolished_properties_area_id_fkey"
+            columns: ["area_id"]
+            isOneToOne: false
+            referencedRelation: "areas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demolished_properties_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demolished_properties_collector_id_fkey"
+            columns: ["collector_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deposits: {
         Row: {
           admin_notes: string | null
@@ -423,6 +545,83 @@ export type Database = {
           {
             foreignKeyName: "deposits_collector_profile_fkey"
             columns: ["collector_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      high_readings: {
+        Row: {
+          area_id: string | null
+          branch_id: string | null
+          collector_id: string
+          created_at: string
+          id: string
+          images: string[]
+          notes: string | null
+          reading: number
+          reviewed: boolean
+          reviewed_at: string | null
+          reviewed_by: string | null
+          subscription_no: string
+          updated_at: string
+        }
+        Insert: {
+          area_id?: string | null
+          branch_id?: string | null
+          collector_id: string
+          created_at?: string
+          id?: string
+          images?: string[]
+          notes?: string | null
+          reading?: number
+          reviewed?: boolean
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          subscription_no: string
+          updated_at?: string
+        }
+        Update: {
+          area_id?: string | null
+          branch_id?: string | null
+          collector_id?: string
+          created_at?: string
+          id?: string
+          images?: string[]
+          notes?: string | null
+          reading?: number
+          reviewed?: boolean
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          subscription_no?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "high_readings_area_id_fkey"
+            columns: ["area_id"]
+            isOneToOne: false
+            referencedRelation: "areas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "high_readings_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "high_readings_collector_id_fkey"
+            columns: ["collector_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "high_readings_reviewed_by_fkey"
+            columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
