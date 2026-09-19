@@ -417,6 +417,115 @@ export type Database = {
           },
         ]
       }
+      custom_section_entries: {
+        Row: {
+          area_id: string | null
+          branch_id: string | null
+          collector_id: string
+          created_at: string
+          id: string
+          images: string[]
+          section_id: string
+          updated_at: string
+          values: Json
+        }
+        Insert: {
+          area_id?: string | null
+          branch_id?: string | null
+          collector_id: string
+          created_at?: string
+          id?: string
+          images?: string[]
+          section_id: string
+          updated_at?: string
+          values?: Json
+        }
+        Update: {
+          area_id?: string | null
+          branch_id?: string | null
+          collector_id?: string
+          created_at?: string
+          id?: string
+          images?: string[]
+          section_id?: string
+          updated_at?: string
+          values?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_section_entries_area_id_fkey"
+            columns: ["area_id"]
+            isOneToOne: false
+            referencedRelation: "areas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_section_entries_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_section_entries_collector_id_fkey"
+            columns: ["collector_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_section_entries_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "custom_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_sections: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string | null
+          description: string | null
+          fields: Json
+          id: string
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          fields?: Json
+          id?: string
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          fields?: Json
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_sections_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       demolished_properties: {
         Row: {
           area_id: string | null

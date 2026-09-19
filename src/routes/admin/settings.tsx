@@ -13,6 +13,7 @@ import {
   updateMyCredentials,
 } from "@/lib/account.functions";
 import { useAuth } from "@/hooks/use-auth";
+import { SectionManager } from "@/components/app/section-manager";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -201,6 +202,8 @@ function SettingsPage() {
           تعديل الاسم واسم المستخدم وكلمة المرور الخاصة بحسابك
         </p>
       </div>
+
+      <SectionManager />
 
       <form onSubmit={onSubmit} className="card-elevated max-w-lg space-y-4 p-5">
         <div className="space-y-2">

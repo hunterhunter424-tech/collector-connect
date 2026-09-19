@@ -9,6 +9,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { formatDateTime, formatNumber } from "@/lib/format";
 import { ReceiptThumb } from "@/components/app/receipt-image";
 import { BackButton } from "@/components/app/back-button";
+import { useCustomSections } from "@/components/app/section-manager";
+import { fieldDef, type CustomSection, type CustomSectionEntry } from "@/lib/custom-sections";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -102,6 +104,124 @@ function FieldReportsPage() {
           <ReportList table="demolished_properties" subsLabel="الاشتراكات التي ما زالت تعمل" />
         </TabsContent>
       </Tabs>
+
+      <CustomSectionsReview />
+    </div>
+  );
+}
+
+function CustomSectionsReview() {
+  const sections = useCustomSections();
+  if (!(sections.data ?? []).length) return null;
+  return (
+    <div className="space-y-4" dir="rtl">
+      <h2 className="text-base font-bold">الأقسام الإضافية</h2>
+      {(sections.data ?? []).map((section) => (
+        <CustomSectionEntries key={section.id} section={section} />
+      ))}
+    </div>
+  );
+}
+
+function CustomSectionEntries({ section }: { section: CustomSection }) {
+  const queryClient = useQueryClient();
+  const { data: auth } = useAuth();
+  const [target, setTarget] = useState<CustomSectionEntry | null>(null);
+
+  const rows = useQuery({
+    queryKey: ["custom-section-entries", "admin", section.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("custom_section_entries")
+        .select(
+          "id, section_id, collector_id, values, images, created_at, profiles!custom_section_entries_collector_id_fkey(full_name)",
+        )
+        .eq("section_id", section.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as CustomSectionEntry[];
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: async (row: CustomSectionEntry) => {
+      if (row.images?.length) await supabase.storage.from("receipts").remove(row.images);
+      const { error } = await supabase.from("custom_section_entries").delete().eq("id", row.id);
+      if (error) throw new Error("تعذر الحذف");
+    },
+    onSuccess: () => {
+      toast.success("تم الحذف");
+      setTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["custom-section-entries"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-bold">
+        {section.name}
+        {section.active ? "" : " (موقوف)"}
+      </p>
+      {rows.isLoading ? (
+        <Skeleton className="h-24 rounded-2xl" />
+      ) : (rows.data ?? []).length === 0 ? (
+        <p className="card-elevated p-4 text-sm text-muted-foreground">لا توجد بيانات مسجلة.</p>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2">
+          {(rows.data ?? []).map((row) => (
+            <div key={row.id} className="card-elevated space-y-2 p-4 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-bold">{row.profiles?.full_name ?? "-"}</span>
+                <span className="text-xs text-muted-foreground">{formatDateTime(row.created_at)}</span>
+              </div>
+              {section.fields
+                .filter((key) => key !== "images")
+                .map((key) => {
+                  const value = row.values?.[key];
+                  if (value === null || value === undefined || value === "") return null;
+                  return (
+                    <p key={key} className="whitespace-pre-wrap text-muted-foreground">
+                      {fieldDef(key)!.label}: {String(value)}
+                    </p>
+                  );
+                })}
+              {row.images?.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {row.images.map((p) => (
+                    <ReceiptThumb key={p} path={p} label="صورة مرفقة" />
+                  ))}
+                </div>
+              ) : null}
+              {auth?.isStaff ? (
+                <Button size="sm" variant="outline" className="text-destructive" onClick={() => setTarget(row)}>
+                  <Trash2 className="size-4" /> حذف
+                </Button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <AlertDialog open={!!target} onOpenChange={(open) => !open && setTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
+            <AlertDialogDescription>سيتم حذف السجل وصوره نهائيًا.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (target) remove.mutate(target);
+              }}
+            >
+              {remove.isPending ? <Loader2 className="size-4 animate-spin" /> : "حذف"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -148,7 +268,7 @@ function ReportList({ table, subsLabel }: { table: Table; subsLabel: string }) {
 
   return (
     <>
-      <div className="grid gap-3 md:grid-cols-2">
+      <div dir="rtl" className="grid gap-3 md:grid-cols-2">
         {(rows.data ?? []).map((row) => (
           <div key={row.id} className="card-elevated space-y-2 p-4 text-sm">
             <div className="flex items-center justify-between">

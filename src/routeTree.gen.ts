@@ -30,6 +30,7 @@ import { Route as CollectorMyDepositsRouteImport } from './routes/collector/my-d
 import { Route as CollectorNewDepositRouteImport } from './routes/collector/new-deposit'
 import { Route as AdminCollectionsIndexRouteImport } from './routes/admin/collections/index'
 import { Route as AdminCollectionsCycleIdRouteImport } from './routes/admin/collections/$cycleId'
+import { Route as CollectorSectionSectionIdRouteImport } from './routes/collector/section.$sectionId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -136,6 +137,12 @@ const AdminCollectionsCycleIdRoute = AdminCollectionsCycleIdRouteImport.update({
   path: '/collections/$cycleId',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const CollectorSectionSectionIdRoute =
+  CollectorSectionSectionIdRouteImport.update({
+    id: '/section/$sectionId',
+    path: '/section/$sectionId',
+    getParentRoute: () => CollectorRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -158,6 +165,7 @@ export interface FileRoutesByFullPath {
   '/collector/my-deposits': typeof CollectorMyDepositsRoute
   '/collector/new-deposit': typeof CollectorNewDepositRoute
   '/admin/collections/$cycleId': typeof AdminCollectionsCycleIdRoute
+  '/collector/section/$sectionId': typeof CollectorSectionSectionIdRoute
   '/admin/collections/': typeof AdminCollectionsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -181,6 +189,7 @@ export interface FileRoutesByTo {
   '/collector/my-deposits': typeof CollectorMyDepositsRoute
   '/collector/new-deposit': typeof CollectorNewDepositRoute
   '/admin/collections/$cycleId': typeof AdminCollectionsCycleIdRoute
+  '/collector/section/$sectionId': typeof CollectorSectionSectionIdRoute
   '/admin/collections': typeof AdminCollectionsIndexRoute
 }
 export interface FileRoutesById {
@@ -205,6 +214,7 @@ export interface FileRoutesById {
   '/collector/my-deposits': typeof CollectorMyDepositsRoute
   '/collector/new-deposit': typeof CollectorNewDepositRoute
   '/admin/collections/$cycleId': typeof AdminCollectionsCycleIdRoute
+  '/collector/section/$sectionId': typeof CollectorSectionSectionIdRoute
   '/admin/collections/': typeof AdminCollectionsIndexRoute
 }
 export interface FileRouteTypes {
@@ -230,6 +240,7 @@ export interface FileRouteTypes {
     | '/collector/my-deposits'
     | '/collector/new-deposit'
     | '/admin/collections/$cycleId'
+    | '/collector/section/$sectionId'
     | '/admin/collections/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -253,6 +264,7 @@ export interface FileRouteTypes {
     | '/collector/my-deposits'
     | '/collector/new-deposit'
     | '/admin/collections/$cycleId'
+    | '/collector/section/$sectionId'
     | '/admin/collections'
   id:
     | '__root__'
@@ -276,6 +288,7 @@ export interface FileRouteTypes {
     | '/collector/my-deposits'
     | '/collector/new-deposit'
     | '/admin/collections/$cycleId'
+    | '/collector/section/$sectionId'
     | '/admin/collections/'
   fileRoutesById: FileRoutesById
 }
@@ -434,6 +447,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCollectionsCycleIdRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/collector/section/$sectionId': {
+      id: '/collector/section/$sectionId'
+      path: '/section/$sectionId'
+      fullPath: '/collector/section/$sectionId'
+      preLoaderRoute: typeof CollectorSectionSectionIdRouteImport
+      parentRoute: typeof CollectorRouteRoute
+    }
   }
 }
 
@@ -478,6 +498,7 @@ interface CollectorRouteRouteChildren {
   CollectorHighReadingsRoute: typeof CollectorHighReadingsRoute
   CollectorMyDepositsRoute: typeof CollectorMyDepositsRoute
   CollectorNewDepositRoute: typeof CollectorNewDepositRoute
+  CollectorSectionSectionIdRoute: typeof CollectorSectionSectionIdRoute
 }
 
 const CollectorRouteRouteChildren: CollectorRouteRouteChildren = {
@@ -487,6 +508,7 @@ const CollectorRouteRouteChildren: CollectorRouteRouteChildren = {
   CollectorHighReadingsRoute: CollectorHighReadingsRoute,
   CollectorMyDepositsRoute: CollectorMyDepositsRoute,
   CollectorNewDepositRoute: CollectorNewDepositRoute,
+  CollectorSectionSectionIdRoute: CollectorSectionSectionIdRoute,
 }
 
 const CollectorRouteRouteWithChildren = CollectorRouteRoute._addFileChildren(

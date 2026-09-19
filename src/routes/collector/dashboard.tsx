@@ -7,6 +7,7 @@ import {
   Gauge,
   Hammer,
   Home,
+  LayoutGrid,
   Megaphone,
   Receipt,
   Wallet,
@@ -19,6 +20,7 @@ import { formatMoney, formatNumber, isoDayStart } from "@/lib/format";
 import { StatCard } from "@/components/app/stat-card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCustomSections } from "@/components/app/section-manager";
 
 export const Route = createFileRoute("/collector/dashboard")({
   head: () => ({
@@ -56,6 +58,8 @@ function CollectorDashboard() {
       return (data ?? []) as { id: string; message: string }[];
     },
   });
+
+  const { data: sections } = useCustomSections(true);
 
   const stats = summarize(today ?? []);
 
@@ -120,7 +124,7 @@ function CollectorDashboard() {
         </Link>
       </Button>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div dir="rtl" className="grid gap-3 sm:grid-cols-3">
         <Button asChild variant="outline" className="h-14 w-full text-base">
           <Link to="/collector/abandoned">
             <Home className="size-5" /> العقارات المهجورة
@@ -137,6 +141,18 @@ function CollectorDashboard() {
           </Link>
         </Button>
       </div>
+
+      {(sections ?? []).length ? (
+        <div dir="rtl" className="grid gap-3 sm:grid-cols-3">
+          {(sections ?? []).map((section) => (
+            <Button key={section.id} asChild variant="outline" className="h-14 w-full text-base">
+              <Link to="/collector/section/$sectionId" params={{ sectionId: section.id }}>
+                <LayoutGrid className="size-5" /> {section.name}
+              </Link>
+            </Button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

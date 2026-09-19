@@ -29,6 +29,13 @@
       "when": 1789756904715,
       "tag": "0003_add_high_reading_prev_current",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789831325441,
+      "tag": "0004_create_custom_sections",
+      "breakpoints": true
     }
   ]
 }
