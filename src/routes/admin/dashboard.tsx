@@ -1,5 +1,20 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { toast } from "sonner";
+import { useAuth } from "@/hooks/use-auth";
+import { closeDepositCycle, fetchCurrentDepositCycle, openDepositCycle } from "@/lib/deposit-cycles";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   AlertCircle,
   Banknote,
@@ -12,7 +27,7 @@ import {
 
 import { supabase } from "@/integrations/supabase/client";
 import { fetchDeposits, summarize } from "@/lib/deposits";
-import { formatDateTime, formatMoney, formatNumber, isoDayStart, isoMonthStart } from "@/lib/format";
+import { formatDateTime, formatMoney, formatNumber, isoDayStart } from "@/lib/format";
 import { StatCard } from "@/components/app/stat-card";
 import { StatusBadge } from "@/components/app/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,12 +45,21 @@ export const Route = createFileRoute("/admin/dashboard")({
 });
 
 function AdminDashboard() {
+  const { data: auth } = useAuth();
+  const isAdmin = auth?.role === "admin";
+  const qc = useQueryClient();
+  const [confirm, setConfirm] = useState<"close" | "open" | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ["admin-dashboard"],
     queryFn: async () => {
+      const cycle = await fetchCurrentDepositCycle();
       const [collectors, monthRows] = await Promise.all([
         supabase.from("profiles").select("id, full_name, active"),
-        fetchDeposits({ from: isoMonthStart(), limit: 2000 }),
+        fetchDeposits({
+          from: cycle?.started_at,
+          to: cycle?.closed_at ?? undefined,
+          limit: 5000,
+        }),
       ]);
       const latest = await fetchDeposits({ limit: 8 });
       const dayStart = isoDayStart();
@@ -60,6 +84,7 @@ function AdminDashboard() {
       }
 
       return {
+        cycle,
         collectorsTotal: (collectors.data ?? []).length,
         collectorsActive: (collectors.data ?? []).filter((c) => c.active).length,
         today: summarize(todayRows),
@@ -71,6 +96,24 @@ function AdminDashboard() {
         branches: [...byBranch.entries()].sort((a, b) => b[1] - a[1]),
       };
     },
+  });
+
+  const cycleMutation = useMutation({
+    mutationFn: async (kind: "close" | "open") => {
+      if (!auth) throw new Error("no auth");
+      if (kind === "close") {
+        if (!data?.cycle) throw new Error("no cycle");
+        await closeDepositCycle(data.cycle.id, auth.userId);
+      } else {
+        await openDepositCycle(auth.userId);
+      }
+    },
+    onSuccess: (_r, kind) => {
+      toast.success(kind === "close" ? "تم إغلاق دورة التوريد" : "تم فتح دورة توريد جديدة");
+      setConfirm(null);
+      qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
+    },
+    onError: () => toast.error("تعذر تنفيذ العملية"),
   });
 
   if (isLoading || !data) {
@@ -89,6 +132,50 @@ function AdminDashboard() {
         <h1 className="text-xl font-bold text-foreground">لوحة تحكم الإدارة</h1>
         <p className="text-sm text-muted-foreground">نظرة عامة على التوريدات والمحصلين</p>
       </div>
+
+      <section className="card-elevated flex flex-wrap items-center justify-between gap-3 p-4">
+        <div className="space-y-1 text-sm">
+          <p className="font-bold">
+            دورة التوريد {data.cycle?.closed_at ? "(مغلقة)" : "الحالية (مفتوحة)"}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {data.cycle ? `من ${formatDateTime(data.cycle.started_at)}` : "لا توجد دورة"}
+            {data.cycle?.closed_at ? ` إلى ${formatDateTime(data.cycle.closed_at)}` : ""}
+          </p>
+        </div>
+        {isAdmin ? (
+          data.cycle && !data.cycle.closed_at ? (
+            <Button variant="destructive" onClick={() => setConfirm("close")}>إنهاء الدورة</Button>
+          ) : (
+            <Button onClick={() => setConfirm("open")}>فتح دورة جديدة</Button>
+          )
+        ) : null}
+      </section>
+
+      <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirm === "close" ? "إنهاء دورة التوريد؟" : "فتح دورة توريد جديدة؟"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirm === "close"
+                ? "سيتم إغلاق الدورة الحالية وتثبيت إجمالياتها. التوريدات لن تُحذف."
+                : "ستبدأ الإحصائيات من الآن وتظهر التوريدات الجديدة فقط لكل محصل."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cycleMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (confirm) cycleMutation.mutate(confirm);
+              }}
+            >
+              تأكيد
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {data.pendingCount > 0 ? (
         <Link
@@ -127,18 +214,18 @@ function AdminDashboard() {
           tone="accent"
         />
         <StatCard
-          label="توريدات الشهر"
+          label="توريدات الدورة"
           value={formatNumber(data.month.total)}
           icon={CalendarRange}
         />
         <StatCard
-          label="قيمة توريدات الشهر"
+          label="قيمة توريدات الدورة"
           value={formatMoney(data.month.amount)}
           icon={Banknote}
           tone="success"
         />
         <StatCard
-          label="فواتير الشهر"
+          label="فواتير الدورة"
           value={formatNumber(data.month.invoices)}
           icon={FileStack}
         />
